@@ -296,15 +296,16 @@ md""" lat $(@bind lat PlutoUI.Slider(-89:89, show_value = true)) """
 absorption(model::ZeroDModel{<:Any, <:Any, <:Function}) = model.ε(model)
 
 # ╔═╡ 56b4c7c0-65e4-4b0c-b0b3-d305308a90e7
-begin
-	max_ε = 0.96
+begin	max_ε = 0.96
 	min_ε = 0.1
 	T_max = 265.0
 	T_min = 180.0
-	function linear_feedback_ε(model)  
-		lin_ε = @. (max_ε - min_ε) / (T_max - T_min) * (model.Tₐ - T_min) + min_ε
-		return @. max(min(lin_ε, max_ε), min_ε)
-	end
+end
+
+# ╔═╡ f6bbaaf8-cc5b-43fc-817b-b6d6e37941b0
+function linear_feedback_ε(model)  
+	lin_ε = @. (max_ε - min_ε) / (T_max - T_min) * (model.Tₐ - T_min) + min_ε
+	return @. max(min(lin_ε, max_ε), min_ε)
 end
 
 # ╔═╡ 7246e5f1-e5ab-43ba-ac3c-35dcf04e540c
@@ -361,19 +362,8 @@ begin
 		ϕᶠ = range(-π/2, π/2, length=npoints+1)
 		Tₛ = 288.0 * ones(npoints)
 		Tₐ = 288.0 * ones(npoints)
-		return OneDModel(stepper, Tₛ, Tₐ, κ, κ, ε, α, Q, Cₛ, Cₐ, ϕᶠ)
+		return OneDModel(stepper, Tₛ, Tₐ, κ, 0.0, ε, α, Q, Cₛ, Cₐ, ϕᶠ)
 	end
-
-	function laplacian(T, Δϕ, ϕᶠ)
-		# Calculate the flux at the interfaces
-		F = cos.(ϕᶠ[2:end-1]) .* (T[2:end] .- T[1:end-1]) ./ Δϕ
-		# add boundary conditions
-		F = [0.0, F..., 0.0]
-		# ϕᶜ is the latitude at temperature locations
-		ϕᶜ = (ϕᶠ[2:end] .+ ϕᶠ[1:end-1]) .* 0.5
-		return 1 ./ cos.(ϕᶜ) .* (F[2:end] .- F[1:end-1]) ./ Δϕ
-	end
-
 end
 
 # ╔═╡ 671acae8-7c7b-4cda-82f6-27c48e7a72c8
@@ -414,19 +404,31 @@ function time_step!(model::ExplicitZeroDModel, Δt)
 end
 
 # ╔═╡ 71cff056-a36c-4fd4-babb-53018894ac5c
-function tendencies(model)
-	Tₛ = model.Tₛ
-	Tₐ = model.Tₐ
+begin
+	function laplacian(T, Δϕ, ϕᶠ)
+		# Calculate the flux at the interfaces
+		F = cos.(ϕᶠ[2:end-1]) .* (T[2:end] .- T[1:end-1]) ./ Δϕ
+		# add boundary conditions
+		F = [0.0, F..., 0.0]
+		# ϕᶜ is the latitude at temperature locations
+		ϕᶜ = (ϕᶠ[2:end] .+ ϕᶠ[1:end-1]) .* 0.5
+		return 1 ./ cos.(ϕᶜ) .* (F[2:end] .- F[1:end-1]) ./ Δϕ
+	end
 	
-	ε  = absorption(model)
+	function tendencies(model)
+		Tₛ = model.Tₛ
+		Tₐ = model.Tₐ
+	
+		ε  = absorption(model)
 
-	Δϕ = model.ϕᶠ[2] - model.ϕᶠ[1]
-	Dₛ = model.κₛ .* laplacian(model.Tₛ, Δϕ, model.ϕᶠ)
-	Dₐ = model.κₐ .* laplacian(model.Tₐ, Δϕ, model.ϕᶠ)
+		Δϕ = model.ϕᶠ[2] - model.ϕᶠ[1]
+		Dₛ = model.κₛ .* laplacian(model.Tₛ, Δϕ, model.ϕᶠ)
+		Dₐ = model.κₐ .* laplacian(model.Tₐ, Δϕ, model.ϕᶠ)
 
-	Gₛ = @. (1 - model.α) * model.Q + σ * (ε * Tₐ^4 - Tₛ^4) + Dₛ
-	Gₐ = @. σ * ε * (Tₛ^4 - 2 * Tₐ^4) + Dₐ
-	return Gₛ, Gₐ
+		Gₛ = @. (1 - model.α) * model.Q + σ * (ε * Tₐ^4 - Tₛ^4) + Dₛ
+		Gₐ = @. σ * ε * (Tₛ^4 - 2 * Tₐ^4) + Dₐ
+		return Gₛ, Gₐ
+	end
 end
 
 # ╔═╡ ddc5ee3b-ac31-4a37-80dc-1a1c9f1ad939
@@ -436,24 +438,6 @@ function time_step!(model::ExplicitOneDModel, Δt)
 
 	model.Tₛ .+= Δt * Gₛ / model.Cₛ
 	model.Tₐ .+= Δt * Gₐ / model.Cₐ
-end
-
-# ╔═╡ 57cfea6e-03ff-4d96-baac-56f6e75a4679
-begin
-	const γ = [-17/60, -5/12]
-	const ι = [8/15,  5/12,  3/4]
-
-	function time_step!(model::RungeKuttaOneDModel, Δt)
-		Gₛ₁, Gₐ₁ = tendencies(model)
-		model.Tₛ .+= Δt * ι[1] * Gₛ₁ / model.Cₛ
-		model.Tₐ .+= Δt * ι[1] * Gₐ₁ / model.Cₐ
-		Gₛ₂, Gₐ₂ = tendencies(model)
-		model.Tₛ .+= Δt * (γ[1] * Gₛ₁ + ι[2] * Gₛ₂) / model.Cₛ
-		model.Tₐ .+= Δt * (γ[1] * Gₐ₁ + ι[2] * Gₐ₂) / model.Cₐ
-		Gₛ₃, Gₐ₃ = tendencies(model)
-		model.Tₛ .+= Δt * (γ[2] * Gₛ₂ + ι[3] * Gₛ₃) / model.Cₛ
-		model.Tₐ .+= Δt * (γ[2] * Gₐ₂ + ι[3] * Gₐ₃) / model.Cₐ
-	end
 end
 
 # ╔═╡ 7c7439f0-d678-4b68-a5e5-bee650fa17e2
@@ -483,8 +467,8 @@ function construct_matrix(model, Δt)
 	ds = @. -ε*eₛ
 
     A = spdiagm(0 => d0,
-                n => da,
-               -n => ds)
+                n => ds,
+               -n => da)
 
 	cosϕᶜ = cos.((model.ϕᶠ[2:end] .+ model.ϕᶠ[1:end-1]).*0.5)
 	Δϕ = model.ϕᶠ[2] - model.ϕᶠ[1]
@@ -578,6 +562,7 @@ end
 
 
 # ╔═╡ 1d8a69b7-52db-4865-8bf2-712c2b6442f5
+# ╠═╡ show_logs = false
 begin 
 	x = -90:2:90
 	T_latitudinal = zeros(length(x))
@@ -595,9 +580,10 @@ begin
 	end
 
 	T_analytical = latitude_dependent_equilibrium_temperature.(x, Ref(ε), Ref(0.2985))
-
+	
+	titl_str = @sprintf("equilibrium ΔT: %.2f ᵒC, feedback ΔT: %.2f ᵒC", T_latitudinal[45] - T_latitudinal[1], T_feedback[45] - T_feedback[1])
 	fl = Figure(resolution = (800, 500))
-	al = Axis(fl[1, 1], title = title_str, ylabel = "Temperature [ᵒC]", xlabel = "time [years]")
+	al = Axis(fl[1, 1], title = titl_str, ylabel = "Temperature [ᵒC]", xlabel = "time [years]")
 	lines!(al, x, (T_feedback .- 273.15), label = "average surface temperature", color = :red, linewidth = 3)	
 
 	lines!(al, x, (T_latitudinal .- 273.15) , linestyle = :dash, label = "average surface temperature", color = :black)
@@ -651,14 +637,16 @@ md""" κ $(@bind κ PlutoUI.Slider(0:0.01:1.0, show_value=true)) """
 
 # ╔═╡ 514ee86b-0aeb-42cd-b4cd-a795ed23b3de
 begin
-	T_1D = one_d_temperature_series(stop_year, ε, κ)
+	T_1D = one_d_temperature_series(stop_year, linear_feedback_ε, κ)
 
 	# f1 = Figure(resolution = (800, 300))
 	# a1 = Axis(f1[1, 1])
 	# heatmap!(a1, T_1D)
+	
+	tit_str = @sprintf("equilibrium ΔT: %.2f ᵒC, feedback ΔT: %.2f ᵒC, diffusive ΔT: %.2f ᵒC", T_latitudinal[45] - T_latitudinal[1], T_feedback[45] - T_feedback[1], T_1D[end, 45] - T_1D[end, 1])
 
 	f10 = Figure(resolution = (800, 300))
-	a10 = Axis(f10[1, 1])
+	a10 = Axis(f10[1, 1], title = tit_str)
 	lines!(a10, x, T_feedback .- 273.15)
 	lines!(a10, x, T_latitudinal .- 273.15)
 	lines!(a10, x, T_1D[end, :] .- 273.15)
@@ -1874,6 +1862,7 @@ version = "3.5.0+0"
 # ╠═d66ed888-357f-417a-8b2a-bceaee354bec
 # ╠═4780c8cb-f037-4fcf-aaa5-5394db04e0b2
 # ╠═56b4c7c0-65e4-4b0c-b0b3-d305308a90e7
+# ╠═f6bbaaf8-cc5b-43fc-817b-b6d6e37941b0
 # ╠═7246e5f1-e5ab-43ba-ac3c-35dcf04e540c
 # ╠═1d8a69b7-52db-4865-8bf2-712c2b6442f5
 # ╟─0839c1b1-9afa-4b88-8123-49e5eeae6b89
@@ -1883,11 +1872,10 @@ version = "3.5.0+0"
 # ╠═671acae8-7c7b-4cda-82f6-27c48e7a72c8
 # ╠═71cff056-a36c-4fd4-babb-53018894ac5c
 # ╠═ddc5ee3b-ac31-4a37-80dc-1a1c9f1ad939
-# ╠═57cfea6e-03ff-4d96-baac-56f6e75a4679
 # ╠═7c7439f0-d678-4b68-a5e5-bee650fa17e2
 # ╠═9a5ac384-f5e6-41b0-8bc4-44e2ed6be472
 # ╠═1ff2446f-ba0c-41be-b569-f4dfe2f1fce8
-# ╠═a046b625-b046-4ca0-adde-be5249a420f4
+# ╟─a046b625-b046-4ca0-adde-be5249a420f4
 # ╠═514ee86b-0aeb-42cd-b4cd-a795ed23b3de
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
