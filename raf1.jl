@@ -717,11 +717,11 @@ end
 # ╔═╡ f6fe91f8-ef2c-4bec-9123-4f4a2d91a665
 
 
-# ╔═╡ 333290b0-0198-4306-b19b-6d30df79a280
-p3 = ODEProblem( (temp, p, t)-> (1/C) * B*(temp₀-temp), start_temp,  (0.0, 170) )
-
 # ╔═╡ 99629ec2-dc70-4253-b191-305bccc9f36b
 p3 = ODEProblem( (temp, p, t)-> (1/C) * ( B*(temp₀-temp)  + greenhouse_effect(CO₂(t))    ) , start_temp,  (0.0, 170) )
+
+# ╔═╡ 333290b0-0198-4306-b19b-6d30df79a280
+p3 = ODEProblem( (temp, p, t)-> (1/C) * B*(temp₀-temp), start_temp,  (0.0, 170) )
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """

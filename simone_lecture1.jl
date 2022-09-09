@@ -296,7 +296,8 @@ md""" lat $(@bind lat PlutoUI.Slider(-89:89, show_value = true)) """
 absorption(model::ZeroDModel{<:Any, <:Any, <:Function}) = model.ε(model)
 
 # ╔═╡ 56b4c7c0-65e4-4b0c-b0b3-d305308a90e7
-begin	max_ε = 0.96
+begin	
+	max_ε = 0.96
 	min_ε = 0.1
 	T_max = 265.0
 	T_min = 180.0
@@ -525,7 +526,6 @@ function latitude_dependent_temperature_series(lat, Nyears, ε)
 	model = ZeroDModel(stepper, Tᵢ, Tᵢ, ε, α, Q, Cₛ, Cₐ)
 
 	# Define simulation parameters, let's use a time step Δt = 30days
-
 	Δt = 30.0
 	stop_time = (Nyears * days_per_year) ÷ Δt # in 30days
 
@@ -564,7 +564,7 @@ end
 # ╔═╡ 1d8a69b7-52db-4865-8bf2-712c2b6442f5
 # ╠═╡ show_logs = false
 begin 
-	x = -90:2:90
+	x = -85:2:85
 	T_latitudinal = zeros(length(x))
 	for (idx, lat) in enumerate(x)
 		T, _ = latitude_dependent_temperature_series(lat, stop_year, ε)
@@ -583,7 +583,7 @@ begin
 	
 	titl_str = @sprintf("equilibrium ΔT: %.2f ᵒC, feedback ΔT: %.2f ᵒC", T_latitudinal[45] - T_latitudinal[1], T_feedback[45] - T_feedback[1])
 	fl = Figure(resolution = (800, 500))
-	al = Axis(fl[1, 1], title = titl_str, ylabel = "Temperature [ᵒC]", xlabel = "time [years]")
+	al = Axis(fl[1, 1], title = titl_str, ylabel = "Temperature [ᵒC]", xlabel = "latitude [ᵒN]")
 	lines!(al, x, (T_feedback .- 273.15), label = "average surface temperature", color = :red, linewidth = 3)	
 
 	lines!(al, x, (T_latitudinal .- 273.15) , linestyle = :dash, label = "average surface temperature", color = :black)
@@ -612,9 +612,11 @@ function one_d_temperature_series(Nyears, ε, κ)
 	stepper = ImplicitTimeStep()
 
 	Q = annual_mean_insolation.(x)
-
+	# α = @. 0.354 + 0.25 * 0.5 * (3 * sind(x)^2 - 1)
+	α = 0.2985
+	
 	#initialize the model with 
-	model = OneDModel(stepper, length(Q); κ, ε, Q)
+	model = OneDModel(stepper, length(Q); κ, ε, Q, α)
 
 	Δt = 30.0
 	stop_time = (Nyears * days_per_year) ÷ Δt # in 30days
@@ -637,7 +639,7 @@ md""" κ $(@bind κ PlutoUI.Slider(0:0.01:1.0, show_value=true)) """
 
 # ╔═╡ 514ee86b-0aeb-42cd-b4cd-a795ed23b3de
 begin
-	T_1D = one_d_temperature_series(stop_year, linear_feedback_ε, κ)
+	T_1D = one_d_temperature_series(stop_year, ε, κ)
 
 	# f1 = Figure(resolution = (800, 300))
 	# a1 = Axis(f1[1, 1])
@@ -650,7 +652,7 @@ begin
 	lines!(a10, x, T_feedback .- 273.15)
 	lines!(a10, x, T_latitudinal .- 273.15)
 	lines!(a10, x, T_1D[end, :] .- 273.15)
-	# ylims!(a10, (200, 340))
+	ylims!(a10, (-60, 50))
 
 	current_figure()
 end
