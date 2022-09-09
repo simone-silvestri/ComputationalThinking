@@ -19,6 +19,7 @@ end
 begin
 	import Pkg
 	using Printf, CairoMakie, PlutoUI
+	using LinearAlgebra, SparseArrays
 end
 
 # ╔═╡ 4cb13d08-2eb3-11ed-01ec-b91fde7e11d0
@@ -233,7 +234,7 @@ linearizing the radiation terms and assuming that ``d_t T = (T_{n+1} - T_{n}) / 
 ```math
 \begin{cases}
 {T_a}_{n+1} (C_a + \Delta t 2\varepsilon \sigma {T_a}_n^3) - \Delta t  \varepsilon \sigma {T_s}_{n+1}{T_s}_n^3 = C_a {T_a}_n \\
-{T_s}_{n+1} (C_s + \Delta t \sigma {T_s}_n^3) - \Delta t \varepsilon \sigma {T_a}_{n+1}{T_a}_n^3 = C_s {T_s}_n + (1 - \alpha) Q \\
+{T_s}_{n+1} (C_s + \Delta t \sigma {T_s}_n^3) - \Delta t \varepsilon \sigma {T_a}_{n+1}{T_a}_n^3 = C_s {T_s}_n + \Delta t (1 - \alpha) Q \\
 \end{cases}
 ```
 
@@ -249,7 +250,7 @@ This becomes the following matrix product
 \end{bmatrix} = 
 \begin{bmatrix}
 C_a {T_a}_n \\
-C_s {T_s}_n + (1 - \alpha) Q
+C_s {T_s}_n +  \Delta t (1 - \alpha) Q
 \end{bmatrix} 
 ```
 """
@@ -294,53 +295,15 @@ md""" lat $(@bind lat PlutoUI.Slider(-89:89, show_value = true)) """
 # We have to define the new absorption model
 absorption(model::ZeroDModel{<:Any, <:Any, <:Function}) = model.ε(model)
 
-# ╔═╡ c0ff6c61-c4be-462b-a91c-0ee1395ef584
-function time_step!(model::ImplicitZeroDModel, Δt)
-	Tₛ = model.Tₛ
-	Tₐ = model.Tₐ
-	Cₛ = model.Cₛ
-	Cₐ = model.Cₐ
-
-	ε = absorption(model)
-
-	eₐ = Δt*σ*Tₐ^3*ε
-	eₛ = Δt*σ*Tₛ^3
-	
-	A = [[Cₐ + 2eₐ, -eₐ] [-ε*eₛ, Cₛ + eₛ]]
-	b = [Cₐ*Tₐ, Cₛ*Tₛ + (1-model.α) * model.Q]
-
-	T = A \ b
-	model.Tₐ = T[1]
-	model.Tₛ = T[2]
-end
-
-# ╔═╡ df49eda8-1f9b-4b09-89c1-ae8f548365f4
-function time_step!(model::ExplicitZeroDModel, Δt)
-	Tₛ = model.Tₛ
-	Tₐ = model.Tₐ
-
-	ε = absorption(model)
-
-	Gₛ = (1 - model.α) * model.Q + σ * (ε * Tₐ^4 - Tₛ^4)
-	Gₐ = σ * ε * (Tₛ^4 - 2*Tₐ^4)
-
-	model.Tₛ += Δt * Gₛ / model.Cₛ
-	model.Tₐ += Δt * Gₐ / model.Cₐ
-end
-
 # ╔═╡ 56b4c7c0-65e4-4b0c-b0b3-d305308a90e7
 begin
 	max_ε = 0.96
-	min_ε = 0.0
-	T_max = 250.0
+	min_ε = 0.1
+	T_max = 265.0
 	T_min = 180.0
 	function linear_feedback_ε(model)  
-		lin_ε = (max_ε - min_ε) / (T_max - T_min) * (model.Tₐ - T_min) + min_ε
-		return max(min(lin_ε, max_ε), min_ε)
-	end
-	function quadratic_feedback_ε(model)  
-		lin_ε = (max_ε - min_ε) / (T_max - T_min)^2 * (model.Tₐ - T_min)^2 + min_ε
-		return max(min(lin_ε, max_ε), min_ε)
+		lin_ε = @. (max_ε - min_ε) / (T_max - T_min) * (model.Tₐ - T_min) + min_ε
+		return @. max(min(lin_ε, max_ε), min_ε)
 	end
 end
 
@@ -385,14 +348,17 @@ begin
 		ϕᶠ :: Φ # the latitudinal grid at interface points
 	end
 
-	const ExplicitOneDModel = OneDModel{<:ExplicitTimeStep}
-	const ImplicitOneDModel = OneDModel{<:ImplicitTimeStep}
+	struct RungeKuttaTimeStep end
+	
+	const ExplicitOneDModel   = OneDModel{<:ExplicitTimeStep}
+	const RungeKuttaOneDModel = OneDModel{<:RungeKuttaTimeStep}
+	const ImplicitOneDModel   = OneDModel{<:ImplicitTimeStep}
 
 	# We define a constructor for the OneDModel
 	function OneDModel(stepper, npoints; κ = 0.55, ε = 0.5, α = 0.2985, Q = 341.3)
-		Cₛ = 1000.0 * 4916 * 100 / (3600 * 24) # ρ * c * H / seconds_per_day
+		Cₛ = 1000.0 * 4182.0 * 100 / (3600 * 24) # ρ * c * H / seconds_per_day
 		Cₐ = 1e5 / 10 * 1000 / (3600 * 24) # Δp / g * c / seconds_per_day
-		ϕᶠ = range(-90, 90, length=npoints+1)
+		ϕᶠ = range(-π/2, π/2, length=npoints+1)
 		Tₛ = 288.0 * ones(npoints)
 		Tₐ = 288.0 * ones(npoints)
 		return OneDModel(stepper, Tₛ, Tₐ, κ, κ, ε, α, Q, Cₛ, Cₐ, ϕᶠ)
@@ -410,33 +376,164 @@ begin
 
 end
 
-# ╔═╡ 9a5ac384-f5e6-41b0-8bc4-44e2ed6be472
-function time_step!(model::ExplicitOneDModel, Δt)
+# ╔═╡ 671acae8-7c7b-4cda-82f6-27c48e7a72c8
+absorption(model::OneDModel{<:Any, <:Any, <:Any, <:Function}) = model.ε(model)
+
+# ╔═╡ c0ff6c61-c4be-462b-a91c-0ee1395ef584
+function time_step!(model::ImplicitZeroDModel, Δt)
+	Tₛ = model.Tₛ
+	Tₐ = model.Tₐ
+	Cₛ = model.Cₛ
+	Cₐ = model.Cₐ
+
+	ε = absorption(model)
+
+	eₐ = Δt*σ*Tₐ^3*ε
+	eₛ = Δt*σ*Tₛ^3
+	
+	A = [[Cₐ + 2eₐ, -eₐ] [-ε*eₛ, Cₛ + eₛ]]
+	b = [Cₐ*Tₐ, Cₛ*Tₛ + Δt * (1-model.α) * model.Q]
+
+	T = A \ b
+	model.Tₐ = T[1]
+	model.Tₛ = T[2]
+end
+
+# ╔═╡ df49eda8-1f9b-4b09-89c1-ae8f548365f4
+function time_step!(model::ExplicitZeroDModel, Δt)
 	Tₛ = model.Tₛ
 	Tₐ = model.Tₐ
 
-	Δϕ = model.ϕᶠ[2] - model.ϕᶠ[1]
+	ε = absorption(model)
+
+	Gₛ = (1 - model.α) * model.Q + σ * (ε * Tₐ^4 - Tₛ^4)
+	Gₐ = σ * ε * (Tₛ^4 - 2*Tₐ^4)
+
+	model.Tₛ += Δt * Gₛ / model.Cₛ
+	model.Tₐ += Δt * Gₐ / model.Cₐ
+end
+
+# ╔═╡ 71cff056-a36c-4fd4-babb-53018894ac5c
+function tendencies(model)
+	Tₛ = model.Tₛ
+	Tₐ = model.Tₐ
 	
 	ε  = absorption(model)
 
+	Δϕ = model.ϕᶠ[2] - model.ϕᶠ[1]
 	Dₛ = model.κₛ .* laplacian(model.Tₛ, Δϕ, model.ϕᶠ)
 	Dₐ = model.κₐ .* laplacian(model.Tₐ, Δϕ, model.ϕᶠ)
 
-	
 	Gₛ = @. (1 - model.α) * model.Q + σ * (ε * Tₐ^4 - Tₛ^4) + Dₛ
 	Gₐ = @. σ * ε * (Tₛ^4 - 2 * Tₐ^4) + Dₐ
+	return Gₛ, Gₐ
+end
+
+# ╔═╡ ddc5ee3b-ac31-4a37-80dc-1a1c9f1ad939
+function time_step!(model::ExplicitOneDModel, Δt)
+
+	Gₛ, Gₐ = tendencies(model)
 
 	model.Tₛ .+= Δt * Gₛ / model.Cₛ
 	model.Tₐ .+= Δt * Gₐ / model.Cₐ
 end
 
+# ╔═╡ 57cfea6e-03ff-4d96-baac-56f6e75a4679
+begin
+	const γ = [-17/60, -5/12]
+	const ι = [8/15,  5/12,  3/4]
+
+	function time_step!(model::RungeKuttaOneDModel, Δt)
+		Gₛ₁, Gₐ₁ = tendencies(model)
+		model.Tₛ .+= Δt * ι[1] * Gₛ₁ / model.Cₛ
+		model.Tₐ .+= Δt * ι[1] * Gₐ₁ / model.Cₐ
+		Gₛ₂, Gₐ₂ = tendencies(model)
+		model.Tₛ .+= Δt * (γ[1] * Gₛ₁ + ι[2] * Gₛ₂) / model.Cₛ
+		model.Tₐ .+= Δt * (γ[1] * Gₐ₁ + ι[2] * Gₐ₂) / model.Cₐ
+		Gₛ₃, Gₐ₃ = tendencies(model)
+		model.Tₛ .+= Δt * (γ[2] * Gₛ₂ + ι[3] * Gₛ₃) / model.Cₛ
+		model.Tₐ .+= Δt * (γ[2] * Gₐ₂ + ι[3] * Gₐ₃) / model.Cₐ
+	end
+end
+
+# ╔═╡ 7c7439f0-d678-4b68-a5e5-bee650fa17e2
+function construct_matrix(model, Δt)
+	Tₛ = model.Tₛ
+	Tₐ = model.Tₐ
+
+	ε = absorption(model)
+	α = model.α
+	Q = model.Q
+
+	Cₐ = model.Cₐ
+	Cₛ = model.Cₛ
+
+	n = length(Tₛ)
+	m = 2 * n
+	A = zeros(m, m)
+	
+	eₐ = @. Δt * σ * Tₐ^3 * ε
+	eₛ = @. Δt * σ * Tₛ^3
+
+	# We insert the diagonal
+	d0 = [(Cₐ .+ 2 .* eₐ)..., (Cₛ .+ eₛ)...] 
+
+	# the off-diagonal corresponding to the interexchange terms
+	da = @. -eₐ
+	ds = @. -ε*eₛ
+
+    A = spdiagm(0 => d0,
+                n => da,
+               -n => ds)
+
+	cosϕᶜ = cos.((model.ϕᶠ[2:end] .+ model.ϕᶠ[1:end-1]).*0.5)
+	Δϕ = model.ϕᶠ[2] - model.ϕᶠ[1]
+
+	a = @. - 1 / Δϕ^2 / cosϕᶜ * cos(model.ϕᶠ[1:end-1])
+	c = @. - 1 / Δϕ^2 / cosϕᶜ * cos(model.ϕᶠ[2:end])
+
+    for i in 1:n
+        if i < n
+            A[i  , i+1]   = model.κₐ * c[i]
+            A[i+n, i+1+n] = model.κₛ * c[i]
+        end
+        if i > 1 
+            A[i,   i-1]   = model.κₐ * a[i]
+            A[i+n, i-1+n] = model.κₛ * a[i]
+        end
+        A[i  , i]   -= model.κₐ * (a[i] + c[i])
+        A[i+n, i+n] -= model.κₛ * (a[i] + c[i])
+    end
+	
+	return A
+end
+
+# ╔═╡ 9a5ac384-f5e6-41b0-8bc4-44e2ed6be472
+function time_step!(model::ImplicitOneDModel, Δt)
+	
+	A = construct_matrix(model, Δt)
+	
+	rhsₐ = model.Cₐ .* model.Tₐ
+	rhsₛ = model.Cₛ .* model.Tₛ .+ Δt .* (1 .- model.α) .* model.Q
+	
+	rhs = [rhsₐ..., rhsₛ...]
+
+	T = A \ rhs
+
+	nₐ = length(model.Tₐ)
+	nₛ = length(model.Tₛ)
+
+	model.Tₐ .= T[1:nₐ]
+	model.Tₛ .= T[nₐ+1:nₐ+nₛ]
+end
+
 # ╔═╡ fd14e483-94a4-4a8b-8ca5-0eb24d487e4a
 function latitude_dependent_temperature_series(lat, Nyears, ε)
-	Cₛ = 1000.0 * 4916 * 100 / (3600 * 24) # ρ * c * H / seconds_per_day
+	Cₛ = 1000.0 * 4182.0 * 100 / (3600 * 24) # ρ * c * H / seconds_per_day
 	Cₐ = 1e5 / 10 * 1000 / (3600 * 24) # Δp / g * c / seconds_per_day
 	Tᵢ = 288.0 # initial temperature
 	α  = 0.2985 # albedo
-	stepper = ExplicitTimeStep()
+	stepper = ImplicitTimeStep()
 
 	Q = annual_mean_insolation(lat)
 
@@ -445,7 +542,7 @@ function latitude_dependent_temperature_series(lat, Nyears, ε)
 
 	# Define simulation parameters, let's use a time step Δt = 30days
 
-	Δt = 30
+	Δt = 30.0
 	stop_time = (Nyears * days_per_year) ÷ Δt # in 30days
 
 	stop_time = Int64(stop_time)
@@ -454,7 +551,7 @@ function latitude_dependent_temperature_series(lat, Nyears, ε)
 	Tₐ = zeros(length(1:stop_time))
 	ε  = zeros(length(1:stop_time))
 	@inbounds for step in 1:stop_time
-		time_step!(model, 30.0)
+		time_step!(model, Δt)
 		Tₛ[step] = model.Tₛ
 		Tₐ[step] = model.Tₐ
 		ε[step]  = absorption(model)
@@ -466,7 +563,7 @@ end
 # ╔═╡ d66ed888-357f-417a-8b2a-bceaee354bec
 
 begin
-	stop_year = 30
+	stop_year = 20
 	T, _ = latitude_dependent_temperature_series(lat, stop_year, 0.5)
 	title_str = @sprintf("equilibrium T: %.2f ᵒC, latitude %d ᵒN", T[end] - 273.15, lat)
 	f = Figure(resolution = (800, 500))
@@ -526,16 +623,14 @@ end
 # ╔═╡ 1ff2446f-ba0c-41be-b569-f4dfe2f1fce8
 function one_d_temperature_series(Nyears, ε, κ)
 	npoints = 90
-	stepper = ExplicitTimeStep()
+	stepper = ImplicitTimeStep()
 
 	Q = annual_mean_insolation.(x)
 
 	#initialize the model with 
-	model = OneDModel(stepper, length(Q); κ, Q)
+	model = OneDModel(stepper, length(Q); κ, ε, Q)
 
-	# Define simulation parameters, let's use a time step Δt = 30days
-
-	Δt = 30
+	Δt = 30.0
 	stop_time = (Nyears * days_per_year) ÷ Δt # in 30days
 
 	stop_time = Int64(stop_time)
@@ -543,7 +638,7 @@ function one_d_temperature_series(Nyears, ε, κ)
 	Tₛ = zeros(length(1:stop_time), length(model.Tₛ))
 	Tₐ = zeros(length(1:stop_time), length(model.Tₐ))
 	@inbounds for step in 1:stop_time
-		time_step!(model, 30.0)
+		time_step!(model, Δt)
 		Tₛ[step, :] .= model.Tₛ
 		Tₐ[step, :] .= model.Tₐ
 	end
@@ -552,20 +647,22 @@ function one_d_temperature_series(Nyears, ε, κ)
 end
 
 # ╔═╡ a046b625-b046-4ca0-adde-be5249a420f4
-md""" κ $(@bind κ PlutoUI.Slider(0:0.01:1, show_value=true)) """
+md""" κ $(@bind κ PlutoUI.Slider(0:0.01:10.0, show_value=true)) """
 
 # ╔═╡ 514ee86b-0aeb-42cd-b4cd-a795ed23b3de
 begin
 	T_1D = one_d_temperature_series(stop_year, ε, κ)
 
-	f1 = Figure(resolution = (800, 300))
-	a1 = Axis(f1[1, 1])
-	heatmap!(a1, T_1D)
+	# f1 = Figure(resolution = (800, 300))
+	# a1 = Axis(f1[1, 1])
+	# heatmap!(a1, T_1D)
 
 	f10 = Figure(resolution = (800, 300))
 	a10 = Axis(f10[1, 1])
+	lines!(a10, x, T_feedback)
 	lines!(a10, x, T_latitudinal)
 	lines!(a10, x, T_1D[end, :])
+	# ylims!(a10, (200, 340))
 
 	current_figure()
 end
@@ -574,9 +671,11 @@ end
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 
 [compat]
 CairoMakie = "~0.8.13"
@@ -1781,6 +1880,11 @@ version = "3.5.0+0"
 # ╟─8f963bc5-1900-426d-ba1f-078ed45b48d3
 # ╟─0d8fffdc-a9f5-4d82-84ec-0f27acc04c21
 # ╠═930935f8-832a-45b4-8e5e-b194afa917c6
+# ╠═671acae8-7c7b-4cda-82f6-27c48e7a72c8
+# ╠═71cff056-a36c-4fd4-babb-53018894ac5c
+# ╠═ddc5ee3b-ac31-4a37-80dc-1a1c9f1ad939
+# ╠═57cfea6e-03ff-4d96-baac-56f6e75a4679
+# ╠═7c7439f0-d678-4b68-a5e5-bee650fa17e2
 # ╠═9a5ac384-f5e6-41b0-8bc4-44e2ed6be472
 # ╠═1ff2446f-ba0c-41be-b569-f4dfe2f1fce8
 # ╠═a046b625-b046-4ca0-adde-be5249a420f4
