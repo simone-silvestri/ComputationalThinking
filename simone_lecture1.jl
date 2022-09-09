@@ -494,15 +494,15 @@ function construct_matrix(model, Δt)
 
     for i in 1:n
         if i < n
-            A[i  , i+1]   = model.κₐ * c[i]
-            A[i+n, i+1+n] = model.κₛ * c[i]
+            A[i  , i+1]   = Δt * model.κₐ * c[i]
+            A[i+n, i+1+n] = Δt * model.κₛ * c[i]
         end
         if i > 1 
-            A[i,   i-1]   = model.κₐ * a[i]
-            A[i+n, i-1+n] = model.κₛ * a[i]
+            A[i,   i-1]   = Δt * model.κₐ * a[i]
+            A[i+n, i-1+n] = Δt * model.κₛ * a[i]
         end
-        A[i  , i]   -= model.κₐ * (a[i] + c[i])
-        A[i+n, i+n] -= model.κₛ * (a[i] + c[i])
+        A[i  , i]   -= Δt * model.κₐ * (a[i] + c[i])
+        A[i+n, i+n] -= Δt * model.κₛ * (a[i] + c[i])
     end
 	
 	return A
@@ -647,7 +647,7 @@ function one_d_temperature_series(Nyears, ε, κ)
 end
 
 # ╔═╡ a046b625-b046-4ca0-adde-be5249a420f4
-md""" κ $(@bind κ PlutoUI.Slider(0:0.01:10.0, show_value=true)) """
+md""" κ $(@bind κ PlutoUI.Slider(0:0.01:1.0, show_value=true)) """
 
 # ╔═╡ 514ee86b-0aeb-42cd-b4cd-a795ed23b3de
 begin
@@ -659,9 +659,9 @@ begin
 
 	f10 = Figure(resolution = (800, 300))
 	a10 = Axis(f10[1, 1])
-	lines!(a10, x, T_feedback)
-	lines!(a10, x, T_latitudinal)
-	lines!(a10, x, T_1D[end, :])
+	lines!(a10, x, T_feedback .- 273.15)
+	lines!(a10, x, T_latitudinal .- 273.15)
+	lines!(a10, x, T_1D[end, :] .- 273.15)
 	# ylims!(a10, (200, 340))
 
 	current_figure()
