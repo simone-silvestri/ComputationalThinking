@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.11
+# v0.19.12
 
 using Markdown
 using InteractiveUtils
@@ -18,45 +18,27 @@ end
 # ╠═╡ show_logs = false
 begin
 	import Pkg
-	using Printf, CairoMakie, PlutoUI
-	using LinearAlgebra, SparseArrays
+	using Printf, CairoMakie, PlutoUI, JLD2
+	using LinearAlgebra, SparseArrays, Optim
+	using DataDeps
 end
-
-# ╔═╡ 4cb13d08-2eb3-11ed-01ec-b91fde7e11d0
-md"""
-# Global heat transport 
-
-This lecture will...
-"""
 
 # ╔═╡ cfb8f979-37ca-40ab-8d3c-0053911717e7
 md"""
-## Variability of Surface forcing
+# Latitudinal Variability
 
-Let's introduce some variability in our planet's forcing. You have seen that the radiative flux that reaches earth can be expressed with 
+Let's introduce some variability in our climate system. You have seen that the total radiative flux that reaches earth can be expressed with 
 ```math
 \pi R^2 S_0 , \ \ \ \ \text{with} \ \ \ \ S_0 \approx 1365 \ W m^{-2}
 ```
-of which only ``(1 - \alpha)`` is absorbed. \ 
-This is just a global, annual average, the flux is not distributed equally along the surface of the planet. \
-The radiation that is absorbed depends on the _zenith angle_, the incident angle between the incoming solar rays and the surface of the earth. 
+of which only ``(1 - \alpha)`` is absorbed. This is just a global, annual averaged forcing, the flux is not distributed equally along the surface of the planet. \
+The amount and the intensity of insolation vary during a day, in a season, and in a year. \
 
-The _instantaneous_ solar heat flux can be modeled with 
-```math
-Q \approx S_0 cos(\theta_z) 
-```
+There are three main parameters that affect the intensity of the incoming solar radiation:
 
-where ``\theta_z`` is the angle in the figure below
-
-$(Resource("https://ars.els-cdn.com/content/image/3-s2.0-B9780128121498000028-f02-02-9780128121498.jpg", :height => 300))
-
-There are three main parameters that affect the zenith angle:
-
-- the hour
-- the season
+- the hour in the day
+- the season of the year
 - the latitude
-
-The variation in the forcing with these three parameters is the cause of the difference in yearly, daily, and latitudinal weather and climate
 
 ---
 """
@@ -99,7 +81,7 @@ The Sun’s rays strike Earth’s surface most directly at the equator. This foc
 Near the poles, the Sun’s rays strike the surface at a slant. This spreads the rays over a wide area. \
 The more focused the rays are, the more energy an area receives, and the warmer it is.
 
-$(Resource("https://dr282zn36sxxg.cloudfront.net/datastreams/f-d%3A768b0173ecea16504f4d5dce5bc41fc6bb39c96b0c596ed9efb015da%2BIMAGE_THUMB_POSTCARD_TINY%2BIMAGE_THUMB_POSTCARD_TINY.tiff", :height => 300))
+$(Resource("https://static.manitobacooperator.ca/wp-content/uploads/2020/02/18151642/insolation_CMYK.jpg#_ga=2.245013061.1375356746.1664813564-1302273094.1664813564", :height => 300))
 
 ---
 """
@@ -108,10 +90,24 @@ $(Resource("https://dr282zn36sxxg.cloudfront.net/datastreams/f-d%3A768b0173ecea1
 md"""
 ## Bringing it all together
 
-The zenith angle can be expressed in terms of hour, declination and latitude as
+We can sum up all these variations in the _zenith angle_, the incident angle between the incoming solar rays and the surface of the earth. 
+
+The _instantaneous_ solar heat flux can be modeled with 
 ```math
-\cos{\theta_z} = \sin{h} \sin{\delta} + \cos{h} \cos{\delta} \sin{\phi}
+Q \approx S_0 cos(\theta_z) 
 ```
+
+where ``\theta_z`` is the angle in the figure below
+
+$(Resource("https://ars.els-cdn.com/content/image/3-s2.0-B9780128121498000028-f02-02-9780128121498.jpg", :height => 300))
+**Figure:** Zenith angle, (M. Rosa-Clot & G. Tina, Submerged and Floating Photovoltaic Systems, 2018, chapter 2)
+
+The zenith angle can be expressed in terms of hour, declination and latitude angles as
+```math
+\cos{\theta_z} = \sin{\phi} \sin{\delta} + \cos{h} \cos{\delta} \cos{\phi}
+```
+What does the first term mean? And the second?
+
 
 Of course, negative insolation does not exist... 
 negative values of ``\cos{\theta_z}`` then indicate nighttime, for which ``Q=0``
@@ -137,6 +133,17 @@ which is easily integrated to
 \langle Q \rangle_{day}  = \frac{S_0}{\pi} \left( h_{ss}\sin{\phi}\sin{\delta}  + \cos{\phi}\cos{\delta}\sin{h_{ss}} \right)
 ```
 
+##### Polar Sunrise and Sunset
+
+Due to the inclination of the earth's axis, some regions experience days and nights that extend beyond 24 hours. 
+
+This phenomenon is called Polar day and Polar night. The longest day and night is at -90/90 ᵒN (the poles) which experience a single day and a single night in the year.
+
+The Polar sunrise and sunset are found at the location where 
+```math
+|\delta| + |\phi| > 90ᵒ
+```
+If ``\delta`` and ``\phi`` have the same sign it means that the sun is rising, vice-versa, if the signs are opposite the sun is setting
 """
 
 
@@ -144,7 +151,7 @@ which is easily integrated to
 function daily_insolation(lat; day = 80, S₀ = 1365.2)
 
 	march_first = 80.0
-	ϕ  = deg2rad(lat)
+	ϕ = deg2rad(lat)
 	δ = deg2rad((23 + 27/60) * sind(360*(day - march_first) / 365.25))
 
 	h₀ = abs(δ) + abs(ϕ) < π/2 ? # there is a sunset / sunrise
@@ -159,43 +166,51 @@ function daily_insolation(lat; day = 80, S₀ = 1365.2)
 	return Q
 end
 
-# ╔═╡ eae88c46-a8b6-4d3f-a9cb-07ce7c0e9ceb
-md"""
-Exercise: write a function to calculate the daily insolation ?
-"""
-
 # ╔═╡ 87fdc7c2-536e-4aa1-9f68-8aec4bc7069d
-@bind day_in_year PlutoUI.Slider(1:365)
+md""" day $(@bind day_in_year PlutoUI.Slider(1:365, show_value=true)) """
 
 # ╔═╡ 8d4d8b93-ebfe-41ff-8b9e-f8931a9e83c2
 begin
-	latitude = range(-90, 90, length = 180)
+	latitude = -90:90
+	δ = (23 + 27/60) * sind(360*(day_in_year - 80.0) / 365.25)
+	
+	polar_ϕ = 90 - abs(δ)
+
+	function day_to_date(day)
+		months = (:Jan, :Feb, :Mar, :Apr, :May, :Jun, :Jul, :Aug, :Sep, :Oct, :Nov, :Dec)
+		days_in_months   = (30, 28, 31, 30, 31, 30, 31, 31, 30, 31, 31, 31)
+		days_till_months = [1, [sum(days_in_months[1:i])+1 for i in 1:11]...]
+
+		month = searchsortedlast(days_till_months, day)
+		day_in_month = month > 1 ? day - sum(days_in_months[1:month-1]) : day
+		
+		return "$(day_in_month) " * string(months[month])
+	end
+	
 	Q = daily_insolation.(latitude; day = day_in_year)
 	fig = Figure(resolution = (700, 300))
-	ax = Axis(fig[1, 1], title = "Daily average insolation, Day: $(day_in_year)", xlabel = "latitude ᵒN", ylabel ="daily ⟨Q⟩ Wm⁻²")
-	lines!(ax, latitude, Q)
+	ax = Axis(fig[1, 1], title = "Daily average insolation, Day: $(day_in_year) ($(day_to_date(day_in_year)))", xlabel = "latitude ᵒN", ylabel ="daily ⟨Q⟩ Wm⁻²")
+	lines!(ax, latitude, Q, linewidth = 2, color=:red)
+	lines!(ax,  polar_ϕ*[1, 1], [0, 600], linestyle=:dash, color=:yellow)
+	lines!(ax, -polar_ϕ*[1, 1], [0, 600], linestyle=:dash, color=:yellow)
 	ax.xticks = [-90, -90+23, -25, -50, 0, 25, 50, 90-23, 90]
 	ylims!(ax, -10, 600)
-	current_figure()
+	
+	md"""
+	$(current_figure())
+	**Figure 1**: daily average insolation in Wm⁻². The yellow lines correspond to the latitude of polar sunset (sunrise), above (below) which it is only night (day) 
+
+	$(Resource("https://ars.els-cdn.com/content/image/1-s2.0-S0074614202800171-gr8.jpg", :height => 400))
+	**Figure 3:**: Daily mean solar insolation (Q/24 hr) as a function of latitude and day of year in units of W m−2 based on a solar constant of 1366 W m−2. The shaded areas denote zero insolation. The position of vernal equinox (VE), summer solstice (SS), autumnal equinox (AE), and winter solstice (WS) are indicated with solid vertical lines. Solar declination is shown with a dashed line (K.N. Liou, An Introduction to Atmospheric Radiation, 2002, chapter 2)
+	"""
 end
-
-# ╔═╡ f2f582f4-f6f3-486a-9e50-10430700df8c
-md"""
-To calculate the annual mean insolation we can just average the daily insolation for all days of the year
-
-```math
-\langle Q \rangle_{\text{yr}} = \frac{1}{365}\sum_{\text{day} = 1}^{365} \langle Q \rangle_{\text{day}}
-```
-
-we can see that, indeed, the average insolation is much lower at the poles compared the equator
-"""
 
 # ╔═╡ 25223f7b-22f7-46c2-9270-4430eb6c186e
 begin
-	function annual_mean_insolation(lat)
+	function annual_mean_insolation(lat; S₀ = 1365.2)
 		Q_avg = 0
 		for day in 1:365
-			Q_avg += daily_insolation(lat; day) / 365
+			Q_avg += daily_insolation(lat; day, S₀) / 365
 		end
 
 		return Q_avg
@@ -210,7 +225,19 @@ begin
 	am = Axis(fm[1, 1], title = "Yearly average insolation", xlabel = "latitude ᵒN", ylabel ="yearly ⟨Q⟩ Wm⁻²")
 	lines!(am, -90:90, Q_avg)
 
-	current_figure()
+	md"""
+	For our purposes, let's forget about the seasons and calculate the yearly average mean isolation
+
+	```math
+	\langle Q \rangle_{\text{yr}} = \frac{1}{365}\sum_{\text{day} = 1}^{365} \langle Q \rangle_{\text{day}}
+	```
+	
+	$(current_figure())
+	**Figure 2**: Annual mean insolation
+	
+	we can see that, indeed, the average insolation is much lower at the poles compared the equator! This is reassuring since the poles are colder than the equator!
+	
+	"""
 end
 
 
@@ -224,7 +251,7 @@ The forcing will be now latitude-dependent, giving a latitude dependent temperat
 ```math
 \begin{align}
 C_a \frac{d T_a}{dt} & = \varepsilon \sigma T_s ^4 - 2\varepsilon \sigma T_a^4 \\
-C_s \frac{d T_s}{dt} & = \varepsilon \sigma T_a^4 - \sigma T_s ^4 + (1 - \alpha) \langle Q \rangle_{\text{yr}} 
+C_s \frac{d T_s}{dt} & = \varepsilon \sigma T_a^4 - \sigma T_s ^4 + (1 - \alpha)  Q(\phi)
 \end{align}
 ```
 
@@ -233,19 +260,17 @@ The system is at equilibrium when all the derivatives in time are zero \
 ```math
 \begin{align}
 & \varepsilon \sigma T_{E,s}^4 - 2\varepsilon \sigma T_{E,a}^4 = 0 \\
-& \varepsilon \sigma T_{E,a}^4 - \sigma T_{E,s}^4 + (1 - \alpha) \langle Q \rangle_{\text{yr}} = 0
+& \varepsilon \sigma T_{E,a}^4 - \sigma T_{E,s}^4 + (1 - \alpha) Q(\phi) = 0
 \end{align}
 ```
 
 which yields
 ```math
 \begin{align}
-& T_{E,a} = \sqrt[4]{\frac{(1 - \alpha) \langle Q \rangle_{\text{yr}}}{\sigma (2 - \varepsilon)}} \\
-& T_{E,s} = \sqrt[4]{\frac{2(1 - \alpha) \langle Q \rangle_{\text{yr}}}{\sigma (2 - \varepsilon)}}
+& T_{E,a}(\phi) = \sqrt[4]{\frac{(1 - \alpha) Q (\phi)}{\sigma (2 - \varepsilon)}} \\
+& T_{E,s}(\phi) = \sqrt[4]{\frac{2(1 - \alpha) Q (\phi)}{\sigma (2 - \varepsilon)}}
 \end{align}
 ```
-
-Let's write it down in a function
 """
 
 # ╔═╡ 5d31e2a8-e357-4479-bc48-de1a1b8bc4d4
@@ -359,7 +384,72 @@ md"""
 ## Let's code our model in Julia!
 
 We can start creating a ```struct``` that contains the information we need, i.e., the parameters of the system, the state of the system and the solution method
+
+Some comments: 
+- Temperature (and forcing) can be either a Scalar or a Vector
+- To retrieve parameters of the `struct` it is useful to write functions that we can later extend
+- It is convenient to write a constructor with some default values and a `show` method 
 """
+
+# ╔═╡ 15dee5d8-e995-4e5a-aceb-48bcce42e76d
+md"""
+### Coding a time stepping function
+
+Now we can write a function which evolves our model of a time step ``\Delta t``. \
+The easiest way to do this is to time step **_explicitly_**
+"""
+
+# ╔═╡ 2287bff1-6fb0-4431-8e15-aff3d7b6e005
+md"""
+If we want to time step implicitly we have to solve the ``AT=b`` linear system 
+
+Fortunately in julia, solving a linear system is as simple as writing
+```
+T = A \ b
+```
+
+the only difficult part remaining is then to construct the matrix \
+Since temperature can be vectors, we align them starting from the surface temperature and following with the atmospheric temperature. Let's imagine we have 3 different latitudes, ``(-45, 0, 45)`` where subscript 1 refers to ``\phi = -45``, while 2 and 3 to ``0`` and ``45``. We can arrange our matrix in the following way
+```math
+  \begin{bmatrix}
+    {D_a}_{1} & & & {d_s}_1 & &\\
+    & {D_a}_{2} & & & {d_s}_2 & \\
+	& & {D_a}_{3}  & & & {d_s}_2 \\
+	{d_a}_1 & & & {D_s}_{1} & & \\
+    & {d_a}_2 & & & {D_s}_{2} & \\
+    & & {d_a}_3 & & & {D_s}_{3}  \\
+  \end{bmatrix} \begin{bmatrix}
+{T_a}_1^{n+1} \\ {T_a}_2^{n+1} \\ {T_a}_3^{n+1} \\ {T_s}_1^{n+1} \\ {T_s}_2^{n+1} \\ {T_s}_3^{n+1}
+\end{bmatrix} = 
+\begin{bmatrix}
+C_a {T_a}_1^{n} \\ C_a {T_a}_2^{n} \\ C_a {T_a}_3^{n} \\ C_s {T_s}_1^{n} + \Delta t F_1  \\ C_s {T_s}_2^{n} + \Delta t F_2  \\ C_s {T_s}_3^{n} + \Delta t F_3
+\end{bmatrix} 
+
+```
+where the diagonal terms are the sink terms, while the off-diagonal are the interexchange terms between surface and atmosphere. (Following the A matrix outlined above)
+"""
+
+# ╔═╡ 049e2164-24ac-467c-9d96-77510ac6ff57
+md"""
+Let's verify that both our model reaches equilibrium if time stepped implicitly and explicitly.
+
+Some constants to be defined:
+- the stefan Boltzmann constant (σ) in [Wm⁻²K⁻⁴]
+- the oceanic and atmospheric heat capacity in [Wm⁻²K⁻¹⋅day]
+
+Note that we need the heat capacity in those units to be able to time step in [days].
+"""
+
+# ╔═╡ f07006ac-c773-4829-9a38-6f9991403386
+begin
+	const σ  = 5.67e-8	
+	const Cₛ = 1000.0 * 4186.0 * 100 / (3600 * 24) #  ρ * c * H / seconds_per_day
+	const Cₐ = 1e5 / 10 * 1000 / (3600 * 24)       # Δp / g * c / seconds_per_day
+end
+
+# ╔═╡ 039ec632-d238-4e63-81fc-a3225ccd2aee
+latitude_dependent_equilibrium_temperature(lat, ε, α) =  
+                 (2 * annual_mean_insolation(lat) * (1 - α) / (2 - ε) / σ )^(1/4)
 
 # ╔═╡ 1431b11f-7838-41da-92e3-bcca9f4215b3
 begin 
@@ -381,7 +471,8 @@ begin
 	const ImplicitZeroDModel = ZeroDModel{<:ImplicitTimeStep}
 
 	# Let's define functions to retrieve the properties of the model.
-	# It will be useful later when we want to have temperature-dependent
+	# It is always useful to define functions to extract struct properties so we 
+	# have the possibility to extend them in the future
 	# emissivity and albedo
 	albedo(model)     = model.α
 	emissivity(model) = model.ε
@@ -399,69 +490,59 @@ begin
         "└── Q: $(model.Q) Wm⁻²")
 	end
 
-	# Let's test the constructor!
-	mod = ZeroDModel(ImplicitTimeStep(), 0.0, 0.0, 0.5, 0.2985, 341, 63, 63)
+	# A constructor with some defaults...
+	function ZeroDModel(step=ImplicitTimeStep(); 
+						ε=0.75, 
+					    α=0.2985, 
+						ϕ=range(-89.0, 89.0,length=90))
+		N = length(ϕ)
+		Q = annual_mean_insolation.(ϕ)
+		Tₛ_init = 200.0 .* ones(N)
+		Tₐ_init = 180.0 .* ones(N)
+
+		args = (Tₛ_init, Tₐ_init, ε, α, Q, Cₛ, Cₐ)
+		return ZeroDModel(step, args...)
+	end
+	
+	# Let's test the constructor and the show method
+	test_model = ZeroDModel(ϕ = 45)
 end
 
-# ╔═╡ 15dee5d8-e995-4e5a-aceb-48bcce42e76d
-md"""
-### Coding a time stepping function
+# ╔═╡ b85fdf41-ef8f-4314-bc3c-383947b9f02c
+@bind values PlutoUI.combine() do Child
+	md"""
+	What happens if we change latitude (``\phi``)? \
+	And if we change ``\varepsilon`` or ``\alpha``? \
+	And if we increase our Δt? \
 
-Now we can write a function which evolves our model of a time step ``\Delta t``. \
-The easiest way to do this is to time step **_explicitly_**
-"""
+	
+	``\varepsilon`` $(
+		Child(PlutoUI.Slider(0:0.05:1, show_value=true, default=0.75))
+	) \
+	
+	``\alpha`` $(
+		Child(PlutoUI.Slider(0:0.05:1, show_value=true, default=0.3))
+	) \
+	
+	``\phi`` $(
+		Child(PlutoUI.Slider(-89:2:89, show_value=true, default=45))
+	) \
+	
+	``\Delta t`` $(
+		Child(PlutoUI.Slider(30:5:100, show_value=true, default=20))
+	)
 
-# ╔═╡ 2287bff1-6fb0-4431-8e15-aff3d7b6e005
-md"""
-If we want to time step implicitly we have to solve the ``Ax=b`` linear system 
-
-Fortunately in julia, solving a linear system is as simple as writing
-```
-x = A \ b
-```
-
-the only difficult part is then the matrix construction
-"""
-
-# ╔═╡ 049e2164-24ac-467c-9d96-77510ac6ff57
-md"""
-Let's verify that both our model reaches equilibrium if time stepped implicitly and explicitly.
-
-Some constants to be defined:
-- the stefan Boltzmann constant (σ) in [Wm⁻²K⁻⁴]
-- the oceanic and atmospheric heat capacity in [Wm⁻²K⁻¹⋅day]
-
-Note that we need the heat capacity in those units to be able to time step in [days].
-"""
-
-# ╔═╡ f07006ac-c773-4829-9a38-6f9991403386
-begin
-	const σ  = 5.67e-8	
-	const Cₛ = 1000.0 * 4186.0 * 500 / (3600 * 24) # ρ * c * H / seconds_per_day
-	const Cₐ = 1e5 / 10 * 1000 / (3600 * 24) # Δp / g * c / seconds_per_day
+	"""
 end
 
-# ╔═╡ 039ec632-d238-4e63-81fc-a3225ccd2aee
-latitude_dependent_equilibrium_temperature(lat, ε, α) =  
-                 (2 * annual_mean_insolation(lat) * (1 - α) / (2 - ε) / σ )^(1/4)
-
-# ╔═╡ a1f3a48e-827b-4a99-8898-4ff6c418426e
-md"""
-What happens if we change latitude (``\phi``)? \
-And if we change ``\varepsilon`` or ``\alpha``? \
-
-And if we increase our Δt? \
-
-(hint: try increasing Δt with ``\varepsilon`` = 1.0, ``\phi`` = 45.0)
-"""
 
 # ╔═╡ 16ca594c-c9db-4528-aa65-bab12cb6e22a
 md"""
-### Stability of the time stepping method
+## Stability of time stepping methods
 
 why did the temperature explode with a large time step? \
 
-Let's analyze it by simplifying a bit our discretized atmospheric equation \
+Let's analyze this by simplifying a bit our discretized atmospheric equation \
 Let's remove the coupling with the surface temperature \
 This is like saying that all of a sudden the atmosphere becomes transparent to the radiation coming from the earth
 ```math
@@ -488,12 +569,13 @@ This translates in the condition on ``\Delta t``
 \Delta t < \frac{1}{D} = \frac{C_a}{2\varepsilon\left( T_a^{(n)}\right)^3}
 ```
 For ``T_a`` equal to 288 K, ``\Delta t`` should be lower than $(@sprintf "%.2f" Cₐ / (2 * 0.5 * σ * 288^3)) days \
+Going back to the previous plot, which combination of parameters will make my model the most unstable?
+
 What happens for implicit time stepping? We have that
 ```math
 \frac{T_a^{(n+1)}}{T_a^n} = \frac{1}{1 + D\Delta t} > 0
 ```
 Since ``D > 0``, implicit time stepping is stable for _any_ positive ``\Delta t`` \
-
 
 In summary, for an ODE: 
 - _Explicit time stepping_ is generally **_conditionally stable_**, i.e. the discrete system is stable given that ``\Delta t < C`` where ``C`` depends on the system. 
@@ -502,188 +584,108 @@ In summary, for an ODE:
 
 # ╔═╡ 6b770afa-bf99-49eb-9489-367d9de58780
 md"""
-Now that we know our model works, we can define a 
+Now that we know our model works, we can define a function which evolves it till the desired end time
 """
-
-# ╔═╡ 4780c8cb-f037-4fcf-aaa5-5394db04e0b2
-# We have to define the new emissivity model
-emissivity(model::ZeroDModel{<:Any, <:Any, <:Function}) = model.ε(model)
-
-# ╔═╡ 56b4c7c0-65e4-4b0c-b0b3-d305308a90e7
-begin	
-	max_ε = 0.96
-	min_ε = 0.1
-	T_max = 265.0
-	T_min = 180.0
-end
-
-# ╔═╡ f6bbaaf8-cc5b-43fc-817b-b6d6e37941b0
-function linear_feedback_ε(model)  
-	lin_ε = @. (max_ε - min_ε) / (T_max - T_min) * (model.Tₐ - T_min) + min_ε
-	return @. max(min(lin_ε, max_ε), min_ε)
-end
-
-# ╔═╡ 7246e5f1-e5ab-43ba-ac3c-35dcf04e540c
-md""" ε $(@bind ε PlutoUI.Slider(0:0.01:1, show_value=true)) """
 
 # ╔═╡ 140bcdac-4145-47b3-952f-bfe50f6ed41c
-begin
-	md"""
-	How does this temperature profile compare to the observed temperature profile?
-
-	$(Resource("https://www.researchgate.net/profile/Anders-Levermann/publication/274494740/figure/fig9/AS:668865801506834@1536481442913/a-Surface-air-temperature-as-a-function-of-latitude-for-land-dashed-line-corrected.png", :height => 400))
-	"""
-
-	lat_obs = [-87.2908,   
-	-86.0833, 
-	-84.8413, 
-	-83.5204,    
-	-82.6333,     
-	-81.0808,     
-	-79.7008,  
-	-78.1482, 
-	-76.0782, 
-	-73.6632, 
-	-71.2482, 
-	-68.8332,  
-	-66.4182,  
-	-63.8307,
-	-61.0706,  
-	-58.3106,  
-	-55.2056,  
-	-51.4537,   
-	-47.7881,  
-	-43.9930,  
-	-40.1980,  
-	-36.4030,  
-	-32.6080,   
-	-28.8129,
-	-25.0179,   
-	-21.2229,  
-	-17.4279,  
-	-13.6328,  
-	 -9.8378,   
-	 -6.0428,   
-	 -2.2478,  
-	  1.5472,    
-	  5.3422,    
-	  9.1372,     
-	 12.9322,          
-	 16.7272,         
-	 20.5223,           
-	 24.3173,           
-	 28.1123,           
-	 31.9073,         
-	 35.7024,           
-	 39.4974,          
-	 43.2924,           
-	 47.0874,         
-	 50.8825,           
-	 54.1600,           
-	 56.9200,           
-	 58.8175,           
-	 65.7175,          
-	 69.5126,
-	 73.3076,
-	 75.8951,
-	 77.2751, 
-	 78.4826,
-	 80.8976, 
-	 83.1402, 
-	 83.8302,
-	 84.5202, 
-	 85.0377, 
-	 85.6242, 
-	 86.6148, 
-	 87.7977]
- 
- 
-temp_obs = [  -15.4018158893,
-	-13.305052685893,
-	-11.338284048502,
-	-9.0570156408927,
-	-6.7468916202373,
-	-4.8962802177149,
-	 -3.520846702022,
-	 -1.483156858275,
-	 0.7571024983380,
-	  2.434417147800,
-	  4.168022378196,
-	   5.98202970152,
-	   7.87414191511,
-	  9.475027779738,
-	  11.30328079477,
-	  12.99083014717,
-	  14.82299144197,
-	   16.5966515477,
-	   18.1441173573,
-	   19.5974342374,
-	  20.95475589151,
-	  21.61233569437,
-	   22.4516729557,
-	    23.269082373,
-	   24.0572546668,
-	  24.80157127300,
-	  25.34853728740,
-	  25.72008055360,
-	   25.9746753209,
-	  26.10501230840,
-	  26.25727713934,
-	  26.41685125145,
-	  26.49602327063,
-	   26.3997725416,
-	 26.639748746654,
-	  26.17072467769,
-	  25.90636048163,
-	  25.43733641267,
-	  24.83674528255,
-	  24.06073140422,
-	  23.24086183884,
-	  22.30404377466,
-	  21.22834936815,
-	  19.93337652637,
-	  18.32044995347,
-	   16.6227207242,
-	  14.76252772619,
-	  13.42187780718,
-	  9.170999804966,
-	  7.478402067257,
-	  6.037243601978,
-	  4.706115741429,
-	  2.675515595445,
-	 0.7923751989401,
-	  -0.79939444441,
-	  -1.52739478311,
-	 -3.497469709634,
-	  -5.54794672907,
-	  -7.19635737143,
-	  -9.76941444745,
-	  -12.3816549634,
-	  -13.7098214977]
-end
-
-# ╔═╡ 0839c1b1-9afa-4b88-8123-49e5eeae6b89
 md"""
-Let's add some feedback, if T increases, ε of the atmosphere increases!
+Let's calculate the equilibrium temperature of the climate system with a variable forcing. 
+How does this temperature profile compare to the observed temperature profile?
+
+$(Resource("https://www.researchgate.net/profile/Anders-Levermann/publication/274494740/figure/fig9/AS:668865801506834@1536481442913/a-Surface-air-temperature-as-a-function-of-latitude-for-land-dashed-line-corrected.png", :height => 400))
+
+**Figure**: Observed temperature profile from: Feulner et al, _On the Origin of the Surface Air Temperature Difference between the Hemispheres in Earth's Present-Day Climate_ (2013), Journal of Climate.
 """
 
-# ╔═╡ de7a09c6-068b-4282-b416-db5f31c4a880
+# ╔═╡ 4d517df8-0496-40a2-8e44-5beda6cd7226
+begin
+	# load the "corrected" temperature profile given a variable H₂O concentration (depending on T and p), a constant CO₂ concentration, and a detailed infrared absorption based on spectral radiation.	
+	T_obs = jldopen("observed_T.jld2")["T"]
+	T_rad = jldopen("detailed_radiation_T.jld2")["T"]
+end
 
+# ╔═╡ 6932b969-0760-4f09-935a-478ac56de262
+md""" ε $(@bind ε PlutoUI.Slider(0:0.01:1, show_value=true, default = 0.75)) """
+
+# ╔═╡ 5884999f-f136-4ae7-8831-cc3a36f50a98
+begin
+	emissivity(model::ZeroDModel{<:Any, <:Any, <:Function}) = model.ε(model)
+	
+	md"""
+	## Feedback effects: emissivity
+	
+
+	Till now we assumed a constant emissivity. As you have seen in 2.2, the emissivity depends on temperature because of the increase in the water vapour saturation pressure at higher temperatures. We can linearize the effect of temperature on emissivityå
+	```math
+	\varepsilon = \varepsilon_0 + \varepsilon_1 \log{\frac{\text{CO}_2}{\text{CO}_2}} + \varepsilon_2(T-T_0)
+	```
+	Remember! The temperature in the above formula is the _surface_ temperature
+	
+	To allow having a temperature-dependent emissivity in we have to extend the ```emissivity``` method to make sure it can accept functions! We can dispatch the emissivity function to behave in a different way when the ε field of our ZeroDModel is a function
+	```
+	emissivity(model::ZeroDModel{<:Any, <:Any, <:Function}) = model.ε(model)
+	```
+	"""
+end
+
+# ╔═╡ fa7d8bbd-c023-4d94-a78a-d3b3223b023f
+begin 
+	ε₀, ε₁, ε₂ = (0.75, 0.02, 0.005)
+	varε(model) = @. min(max(ε₀ + ε₁ * log2(440.0/280) + ε₂ * (model.Tₛ - 286.38), 0), 1.0)
+	
+	md"""
+	Now we can define a function that accepts the model as an input and returns the emissivity
+
+	```
+	ε₀, ε₁, ε₂ = (0.75, 0.02, 0.005)	
+	
+	varε(model) = @. min(max(ε₀ + ε₁ * log2(440.0/280) + ε₂ * (model.Tₛ - 286.38), 0), 1.0)
+	```
+	Note! Physical values of emissivity range between 0 and 1!
+	"""
+end
 
 # ╔═╡ 8f963bc5-1900-426d-ba1f-078ed45b48d3
 md"""
-# Heat Transport
+# Global atmospheric circulation
+
+The earth receives almost all of its energy from the sun. The earth in turn radiates back to space the energy received from the sun. As a result, the earth neither warms up nor does it get cooled over a period of time. Thus, the amount of heat received by different parts of the earth is not the same. This variation causes pressure differences in the atmosphere. This leads to transfer of heat from one region to the other by winds. This chapter explains the process of heating and cooling of the atmosphere and the resultant temperature distribution over the earth’s surface.
+
+_video_ \
+what do we have to add to our model to include atmospheric circulation?
+
+```math
+\begin{align}
+C_a \frac{dT_a}{dt} & = \sigma T_s^4 - 2\varepsilon \sigma T_a^4 + \mathcal{T}_a \\
+C_s \frac{dT_s}{dt} & = - \sigma T_s^4 + \varepsilon \sigma T_a^4 + (1 - \alpha) Q + \mathcal{T}_s
+\end{align}
+```
+
+where ``\mathcal{T}_a`` and ``\mathcal{T}_s`` represent the source/sink caused by heat transport.
+
+How can we calculate these additional terms?
+
+
+
+
+
 """
 
 # ╔═╡ 0d8fffdc-a9f5-4d82-84ec-0f27acc04c21
 md"""
-# 1D Model
+## Let's code it up!
 
-Now we assume that we have latitudinal transport
+Our governing system of equation is now a system of PDE, so we have to solve the x-direction as well at the time.
 
-```math 
-
+We need to define a ``\Delta x`` (or ``\Delta \phi`` in our case) and we can discretize a spatial derivative in the same way as the time-derivative
+```math
+\frac{\partial T}{\partial \phi} \big\rvert_{j+1/2} \approx \frac{T_{j+1} - T_{j}}{\Delta \phi}
 ```
+Then a second derivative will be
+```math
+\frac{\partial^2 T}{\partial \phi^2} \big\rvert_{j+1/2} \approx \frac{T_{j+1} - T_{j}}{\Delta \phi}
+```
+##### Staggering variables
 """
 
 
@@ -706,27 +708,42 @@ begin
 	const ExplicitOneDModel   = OneDModel{<:ExplicitTimeStep}
 	const ImplicitOneDModel   = OneDModel{<:ImplicitTimeStep}
 
+	timestepping(model::ExplicitOneDModel) = "Explicit"
+	timestepping(model::ImplicitOneDModel) = "Implicit"
+
 	# We define a constructor for the OneDModel
-	function OneDModel(stepper, npoints; κ = 0.55, ε = 0.5, α = 0.2985, Q = 341.3)
+	function OneDModel(step, npoints; κ = 0.55, κₛ = κ, ε = 0.5, α = 0.2985, Q = 341.3)
 		Cₛ = 1000.0 * 4182.0 * 100 / (3600 * 24) # ρ * c * H / seconds_per_day
 		Cₐ = 1e5 / 10 * 1000 / (3600 * 24) # Δp / g * c / seconds_per_day
 		ϕᶠ = range(-π/2, π/2, length=npoints+1)
 		Tₛ = 288.0 * ones(npoints)
 		Tₐ = 288.0 * ones(npoints)
-		return OneDModel(stepper, Tₛ, Tₐ, κ, 0.0, ε, α, Q, Cₛ, Cₐ, ϕᶠ)
+		return OneDModel(step, Tₛ, Tₐ, κₛ, κ, ε, α, Q, Cₛ, Cₐ, ϕᶠ)
 	end
+
+	# A pretty show method that displays the model's parameters
+	function Base.show(io::IO, model::OneDModel)
+		print(io, "One-D energy budget model with:", '\n',
+		"├── time stepping: $(timestepping(model))", '\n',
+    	"├── ε: $(emissivity(model))", '\n',
+        "├── α: $(albedo(model))", '\n',
+        "├── κ: $(model.κₛ)", '\n',
+        "└── Q: $(model.Q) Wm⁻²")
+	end
+
+	emissivity(model::OneDModel) = model.ε
+	emissivity(model::OneDModel{<:Any, <:Any, <:Any, <:Function}) = model.ε(model)
+
+	albedo(model::OneDModel) = model.α
+	albedo(model::OneDModel{<:Any, <:Any, <:Any, <:Any, <:Function}) = model.α(model)
+	
+	test_1D_model = OneDModel(ImplicitTimeStep(), 90)
 end
 
-# ╔═╡ 671acae8-7c7b-4cda-82f6-27c48e7a72c8
-emissivity(model::OneDModel{<:Any, <:Any, <:Any, <:Function}) = model.ε(model)
-
-# ╔═╡ 2176bf50-8ae1-46d2-aa50-0176b24e6e74
-albedo(model::OneDModel) = model.α
-
-# ╔═╡ 430e73b6-33a5-4149-b090-926571adabb2
-albedo(model::OneDModel{<:Any, <:Any, <:Any, <:Any, <:Function}) = model.α(model)
-
 # ╔═╡ a93c36c9-b687-44b9-b0b6-5fe636ab061c
+# Remember that our temperature can be a scalar or a vector, 
+# depending on the latitude given to construct the model
+
 function time_step!(model::ExplicitZeroDModel, Δt)
 	Tₛ = model.Tₛ
 	Tₐ = model.Tₐ
@@ -734,38 +751,62 @@ function time_step!(model::ExplicitZeroDModel, Δt)
 	α = albedo(model)
 	ε = emissivity(model)
 
-	Gₛ = (1 - α) * model.Q + σ * (ε * Tₐ^4 - Tₛ^4)
-	Gₐ = σ * ε * (Tₛ^4 - 2*Tₐ^4)
+	Gₛ = @. (1 - α) * model.Q + σ * (ε * Tₐ^4 - Tₛ^4)
+	Gₐ = @. σ * ε * (Tₛ^4 - 2*Tₐ^4)
 
-	model.Tₛ += Δt * Gₛ / model.Cₛ
-	model.Tₐ += Δt * Gₐ / model.Cₐ
+	@. model.Tₛ += Δt * Gₛ / model.Cₛ
+	@. model.Tₐ += Δt * Gₐ / model.Cₐ
 end
 
 # ╔═╡ c0ff6c61-c4be-462b-a91c-0ee1395ef584
 begin
-	function construct_matrix(model::ImplicitZeroDModel, Δt)
+	function construct_matrix(model, Δt)
 		Tₛ = model.Tₛ
 		Tₐ = model.Tₐ
-		Cₛ = model.Cₛ
-		Cₐ = model.Cₐ
 	
 		ε = emissivity(model)
+		Q = model.Q
 	
-		eₐ = Δt*σ*Tₐ^3 
-		eₛ = Δt*σ*Tₛ^3 
+		Cₐ = model.Cₐ
+		Cₛ = model.Cₛ
+	
+		n = length(Tₛ)
+		m = 2 * n
+		A = zeros(m, m)
 		
-		return [[Cₐ + 2ε*eₐ, -ε*eₐ] [-ε*eₛ, Cₛ + eₛ]]
-	end
+		eₐ = @. Δt * σ * Tₐ^3 * ε
+		eₛ = @. Δt * σ * Tₛ^3
 	
-	function time_step!(model::ImplicitZeroDModel, Δt)
+		# We insert the diagonal
+		D = [(@. Cₐ + 2 * eₐ)..., (@. Cₛ + eₛ)...] 
+	
+		# the off-diagonal corresponding to the interexchange terms
+		da = @. -eₐ
+		ds = @. -ε*eₛ
+	
+	    A = spdiagm(0 => D,
+	                n => [ds...],
+	               -n => [da...])
+		return A
+	end
 
+	function time_step!(model::ImplicitZeroDModel, Δt)
 		α = albedo(model)
 		A = construct_matrix(model, Δt)
-		b = [model.Cₐ * model.Tₐ, model.Cₛ * model.Tₛ + Δt * (1-α) * model.Q]
+		
+		rhsₐ = @. model.Cₐ * model.Tₐ
+		rhsₛ = @. model.Cₛ * model.Tₛ + Δt * (1 - α) * model.Q
 	
-		T = A \ b
-		model.Tₐ = T[1]
-		model.Tₛ = T[2]
+		rhs = [rhsₐ..., rhsₛ...]
+
+	
+		T = A \ rhs
+
+		nₐ = length(model.Tₐ)
+		nₛ = length(model.Tₛ)
+	
+		@. model.Tₐ = T[1:nₐ]
+		@. model.Tₛ = T[nₐ+1:nₐ+nₛ]
 	end
 end
 
@@ -773,12 +814,12 @@ end
 begin
 	function laplacian(T, Δϕ, ϕᶠ)
 		# Calculate the flux at the interfaces
-		F = cos.(ϕᶠ[2:end-1]) .* (T[2:end] .- T[1:end-1]) ./ Δϕ
+		Flux = cos.(ϕᶠ[2:end-1]) .* (T[2:end] .- T[1:end-1]) ./ Δϕ
 		# add boundary conditions
-		F = [0.0, F..., 0.0]
+		Flux = [0.0, Flux..., 0.0]
 		# ϕᶜ is the latitude at temperature locations
 		ϕᶜ = (ϕᶠ[2:end] .+ ϕᶠ[1:end-1]) .* 0.5
-		return 1 ./ cos.(ϕᶜ) .* (F[2:end] .- F[1:end-1]) ./ Δϕ
+		return 1 ./ cos.(ϕᶜ) .* (Flux[2:end] .- Flux[1:end-1]) ./ Δϕ
 	end
 	
 	function tendencies(model)
@@ -795,52 +836,28 @@ begin
 		Gₐ = @. σ * ε * (Tₛ^4 - 2 * Tₐ^4) + Dₐ
 		return Gₛ, Gₐ
 	end
-end
 
-# ╔═╡ ddc5ee3b-ac31-4a37-80dc-1a1c9f1ad939
-function time_step!(model::ExplicitOneDModel, Δt)
+	function time_step!(model::ExplicitOneDModel, Δt)
 
 	Gₛ, Gₐ = tendencies(model)
 
 	model.Tₛ .+= Δt * Gₛ / model.Cₛ
 	model.Tₐ .+= Δt * Gₐ / model.Cₐ
 end
+end
 
 # ╔═╡ 7c7439f0-d678-4b68-a5e5-bee650fa17e2
-function construct_matrix(model, Δt)
-	Tₛ = model.Tₛ
-	Tₐ = model.Tₐ
+function construct_diffusion_matrix(model, Δt)
 
-	ε = emissivity(model)
-	Q = model.Q
-
-	Cₐ = model.Cₐ
-	Cₛ = model.Cₛ
-
-	n = length(Tₛ)
-	m = 2 * n
-	A = zeros(m, m)
+	A = construct_matrix(model, Δt)
 	
-	eₐ = @. Δt * σ * Tₐ^3 * ε
-	eₛ = @. Δt * σ * Tₛ^3
-
-	# We insert the diagonal
-	d0 = [(Cₐ .+ 2 .* eₐ)..., (Cₛ .+ eₛ)...] 
-
-	# the off-diagonal corresponding to the interexchange terms
-	da = @. -eₐ
-	ds = @. -ε*eₛ
-
-    A = spdiagm(0 => d0,
-                n => ds,
-               -n => da)
-
 	cosϕᶜ = cos.((model.ϕᶠ[2:end] .+ model.ϕᶠ[1:end-1]).*0.5)
 	Δϕ = model.ϕᶠ[2] - model.ϕᶠ[1]
 
 	a = @. - 1 / Δϕ^2 / cosϕᶜ * cos(model.ϕᶠ[1:end-1])
 	c = @. - 1 / Δϕ^2 / cosϕᶜ * cos(model.ϕᶠ[2:end])
 
+	n = length(model.Tₛ)
     for i in 1:n
         if i < n
             A[i  , i+1]   = Δt * model.κₐ * c[i]
@@ -860,7 +877,7 @@ end
 # ╔═╡ 9a5ac384-f5e6-41b0-8bc4-44e2ed6be472
 function time_step!(model::ImplicitOneDModel, Δt)
 	
-	A = construct_matrix(model, Δt)
+	A = construct_diffusion_matrix(model, Δt)
 	α = albedo(model)
 
 	rhsₐ = model.Cₐ .* model.Tₐ
@@ -879,27 +896,14 @@ end
 
 # ╔═╡ 00776863-2260-48a8-83c1-3f2696f11d96
 begin 
-	function compare_methods()
-		# parameters
-		α = 0.2985 # albedo
-		ε = 0.5    # emissivity
-		ϕ = 45.0   # latitude
-		
-		# initial conditions
-		Tᵢ = 0.0    # we start from 0 K 
-
-		# forcing
-		Q = annual_mean_insolation(ϕ)
-
-		inputs = (Tᵢ, Tᵢ, ε, α, Q, Cₛ, Cₐ)
+	function compare_methods(ε, α, ϕ, Δt)
 
 		# Construct the two models
-		model_explicit = ZeroDModel(ExplicitTimeStep(), inputs...)
-		model_implicit = ZeroDModel(ImplicitTimeStep(), inputs...)
+		model_explicit = ZeroDModel(ExplicitTimeStep(); α, ε, ϕ)
+		model_implicit = ZeroDModel(ImplicitTimeStep(); α, ε, ϕ)
 
 		# Time stepping parameters
-		stop_year = 200
-		Δt = 1000
+		stop_year = 50
 		nsteps = Int((stop_year * 365) ÷ Δt) # in 30days
 	
 		T_explicit = zeros(nsteps)
@@ -908,18 +912,20 @@ begin
 		@inbounds for step in 1:nsteps
 			time_step!(model_explicit, Δt)
 			time_step!(model_implicit, Δt)
-			T_explicit[step] = model_explicit.Tₛ
-			T_implicit[step] = model_implicit.Tₛ
+			T_explicit[step] = model_explicit.Tₛ[1]
+			T_implicit[step] = model_implicit.Tₛ[1]
 		end
 
 		time_axis = (1:nsteps) .* (Δt / 365)
 	
 		T_equilibrium = latitude_dependent_equilibrium_temperature(ϕ, ε, α) .* ones(nsteps)
-		T_reference   = latitude_dependent_equilibrium_temperature(45.0, 0.5, 0.2985) .* ones(nsteps)
+		T_reference   = latitude_dependent_equilibrium_temperature(45.0, 0.75, 0.3) .* ones(nsteps)
 
-		fig = Figure(resolution = (700, 300))
-		ax  = Axis(fig[1, 1], title = "evolution of temperature at 45 ᵒN", ylabel = "Temperature [ᵒC]", xlabel = "time [yr]")
-		lines!(ax, time_axis, T_reference, color = :black, linewidth = 1, linestyle=:dash, label = "equilibrium at 45 ᵒN and ε = 0.5, α = 0.2985")
+		title = @sprintf("evolution of temperature at %d ᵒN, equilibrium T: %.2f ᵒC", values[3], T_equilibrium[end])
+
+		fig = Figure(resolution = (800, 300))
+		ax  = Axis(fig[1, 1]; title, ylabel = "Temperature [K]", xlabel = "time [yr]")
+		lines!(ax, time_axis, T_reference, color = :black, linewidth = 1, linestyle=:dash, label = "equilibrium at 45 ᵒN and ε = 0.75, α = 0.3")
 		lines!(ax, time_axis, T_equilibrium, color = :red, linewidth = 1, linestyle=:dashdot, label = "equilibrium temperature")
 		lines!(ax, time_axis, T_explicit , color = :blue, linewidth = 2, label = "explicit time stepping")	
 		lines!(ax, time_axis, T_implicit , color = :green, linewidth = 2, label = "implicit time stepping")	
@@ -929,181 +935,356 @@ begin
 		return fig
 	end
 
-	comparison = compare_methods()
+	comparison = compare_methods(values[1], values[2], values[3], values[4])
 	current_figure()
 end
 
 # ╔═╡ fd14e483-94a4-4a8b-8ca5-0eb24d487e4a
-function evolve_till_equilibrium!(model; Δt = 30.0)
-	ΔT = 1000.0
-	Tₒ = model.Tₛ
-	while abs(ΔT) > 0.01
+# Function that evolves our model till `stop_year` with a time step of `Δt`
+function evolve_model!(model; Δt = 30.0, stop_year = 40)
+	stop_iteration = Int(stop_year * 365 ÷ Δt)
+	for iter in 1:stop_iteration
 		time_step!(model, Δt)
-		ΔT = model.Tₛ - Tₒ
-		Tₒ = model.Tₛ
 	end
 end
 
 # ╔═╡ 1d8a69b7-52db-4865-8bf2-712c2b6442f5
 # ╠═╡ show_logs = false
 begin 
-	x = -85:2:85
-	T_latitudinal = zeros(length(x))
-	for (idx, lat) in enumerate(x)
-		
-		args = (288.0, 288.0, ε, 0.2985, annual_mean_insolation(lat), Cₛ, Cₐ)
-		model = ZeroDModel(ExplicitTimeStep(), args...)
 
-		evolve_till_equilibrium!(model, )
-		T, _ = latitude_dependent_temperature_series(lat, stop_year, ε)
-		T_latitudinal[idx] = T[end]
+	function plot_latitudinal_variables!(ϕ, T, labels, colors, styles; ylabel = "Temperature [ᵒC]", ylims = nothing, title = nothing)
+		figure = Figure(resolution = (800, 400))
+		if !isnothing(title)
+			axis = Axis(figure[1, 1]; title, ylabel, xlabel = "latitude [ᵒN]")	
+		else
+			axis = Axis(figure[1, 1]; ylabel, xlabel = "latitude [ᵒN]")	
+		end
+		colors = 
+		for (temp, label, color, linestyle) in zip(T, labels, colors, styles)
+			lines!(axis, ϕ, temp; linestyle, label, color)
+		end
+		axislegend(axis, position = :cb, framevisible = false)
+		if !isnothing(ylims)
+			ylims!(axis, ylims)
+		end
 	end
 	
-	T_feedback = zeros(length(x))
-	ε_feedback = zeros(length(x))
-	for (idx, lat) in enumerate(x)
-		T, εf = latitude_dependent_temperature_series(lat, 20, linear_feedback_ε)
-		T_feedback[idx] = T[end]
-		ε_feedback[idx] = εf[end]
-	end
+	ϕ = range(-89, 89, length=90)
+	model_lat = ZeroDModel(; ε, ϕ)
 
-	T_analytical = latitude_dependent_equilibrium_temperature.(x, Ref(ε), Ref(0.2985))
+	T_eq  = latitude_dependent_equilibrium_temperature.(ϕ, Ref(ε), Ref(0.2985));
 	
-	titl_str = @sprintf("equilibrium ΔT: %.2f ᵒC, feedback ΔT: %.2f ᵒC", T_latitudinal[45] - T_latitudinal[1], T_feedback[45] - T_feedback[1])
-	fl = Figure(resolution = (800, 500))
-	al = Axis(fl[1, 1], title = titl_str, ylabel = "Temperature [ᵒC]", xlabel = "latitude [ᵒN]")
-	lines!(al, x, (T_feedback .- 273.15), label = "surface temperature with feedback", color = :red, linewidth = 3)	
+	evolve_model!(model_lat, Δt = 50, stop_year = 50);
+	T_lat = model_lat.Tₛ;
 
-	lines!(al, x, (T_latitudinal .- 273.15) , linestyle = :dash, label = "surface temperature after $stop_year years", color = :black)
-	lines!(al, x, (T_analytical .- 273.15) , label = "equilibrium surface temperature", color = :black)
-	lines!(al, lat_obs, temp_obs , label = "equilibrium surface temperature", color = :black)
-	ylims!(al, (-50, 50))
-	axislegend(al, position = :cb)
-
-	ax2 = fl[1,1] = Axis(fl, ylabel = "emissivity ε [-]")
-	lines!(ax2, x, ε_feedback , label = "emissivity", color = :blue)
-	ylims!(ax2, (0.0, 1.0))
-	axislegend(ax2, position = :rt)
+	temp    = [T_obs.-273.15, T_eq.-273.15, T_lat.-273.15];
+	labels  = ["observed T", "equilibrium T", "modelled T"];
+	colors  = [:black, :green, :red];
+	styles  = [:dashdot, :solid, :solid];
+	plot_latitudinal_variables!(ϕ, temp, labels, colors, styles; ylims = (-40, 40));
 	
-	ax2.yaxisposition = :right
-	ax2.yticklabelalign = (:left, :center)
-	ax2.xticklabelsvisible = false
-	ax2.xticklabelsvisible = false
-	ax2.xlabelvisible = false
-
-	linkxaxes!(al,ax2)
-
-	current_figure()	
+	md""" 
+	$(current_figure())
+	**Figure**: Comparison between observed (dashed-dotted line) and calculated, temperature
+	"""
 end
 
-# ╔═╡ 1ff2446f-ba0c-41be-b569-f4dfe2f1fce8
-function one_d_temperature_series(Nyears, ε, κ; α = 0.2985)
-	npoints = 90
-	stepper = ImplicitTimeStep()
+# ╔═╡ 69acab94-5daf-4a24-9075-98126fadc166
+begin
 
-	Q = annual_mean_insolation.(x)
+	model_feedback = ZeroDModel(ImplicitTimeStep(); ε = varε, ϕ)
+
+	evolve_model!(model_feedback, Δt = 25, stop_year = 50)
+	temp_new = [temp..., T_rad.-273.15, model_feedback.Tₛ.-273.15]
+	sty_new  = [styles..., :dash, :solid]
+	col_new  = [colors..., :blue, :blue]
+	lab_new  = [labels..., "detailed radiation T", "feedback T"]
 	
-	#initialize the model with 
-	model = OneDModel(stepper, length(Q); κ, ε, Q, α)
+	plot_latitudinal_variables!(ϕ, [model_feedback.Tₛ .- 273.15,
+									T_eq.-273.15,
+									T_obs .- 273, 
+									# T_rad .- 273
+									],
+									["variable ε",
+									"constant ε", 
+									"observed T",
+									"detailed radiation"], 
+									[:blue, :red, :black, :purple], 
+									[:solid, :solid, :dashdot, :dash], ylims = (-70, 70))
 
-	Δt = 30.0
-	stop_time = (Nyears * 365) ÷ Δt # in 30days
+	md"""
+	$(current_figure())
+	**Figure**: comparison between observed temperature (dashed-dotted line), temperature calculated with a constant ``\varepsilon`` (red) and with linearized water vapour feedback (blue)
 
-	stop_time = Int64(stop_time)
+	Our prediction for temperature is worst with feedback!
+
+	**try it for yourself!** \
+	Add another atmospheric layer so to have two temperatures ``T_{a1}`` and ``T_{a2}``. \
+	How do the equations change? \
+	(Assume the two layers have emissivities ``\varepsilon_1`` and ``\varepsilon_2`` where ``\varepsilon_1 < \varepsilon_2``)
+	"""
+end
+
+#= 
+	**Figure**: comparison between observed temperature (dashed-dotted line), temperature calculated by a vertical 1D model with detailed description of longwave radiation (dash) and calculated by simple ZeroDModel with water vapour feedback (solid)
+
+	The solid lines have been obtained assuming that the temperature has a vertical structure, so instead of having just a 1-layer atmosphere, the atmosphere is divided in more levels and the temperature in each one is allowed to change.
+	The feedback effect is included assuming that H₂O concentration is proportional to temperature of each layer, and the emissivity is diagnosed by the detailed absorption spectra of ``\text{H}_2\text{O}``, ``\text{CO}_2`` and ``\text{O}_3``
+
+	Why is the temperature at the surface higher when we assume a vertical structure? \
+=#
+
+# ╔═╡ 1a4d9e1b-a8b3-40ec-b4d9-84caa7d43a1d
+begin 	
+	ASR_obs = jldopen("observed_radiation.jld2")["ASR"]
+	OLR_obs = jldopen("observed_radiation.jld2")["OLR"]
 	
-	Tₛ = zeros(length(1:stop_time), length(model.Tₛ))
-	Tₐ = zeros(length(1:stop_time), length(model.Tₐ))
-	@inbounds for step in 1:stop_time
-		time_step!(model, Δt)
-		Tₛ[step, :] .= model.Tₛ
-		Tₐ[step, :] .= model.Tₐ
-	end
+	varα = 0.315 .+ 0.15 .* 0.5 .* (3. * sind.(ϕ).^2 .- 1)
+	ASR(model) = (1 .- albedo(model)) .* model.Q 
+	model_var1 = ZeroDModel(α = varα)
+	
+	variables = [ASR(model_feedback), ASR(model_var1), ASR_obs]
+	
+	lab_rad = ["modeled ASR", "variable α ASR", "observed ASR"]
+	sty_rad = [:solid, :dash, :solid, :dash, :dashdot, :dashdot]
+	col_rad = [:red, :red, :blue, :blue, :red, :blue]
+	yla_rad = "Absorbed Shortwave Radiation (ASR) Wm⁻²"
+	plot_latitudinal_variables!(ϕ, variables, lab_rad, col_rad, sty_rad, ylabel = yla_rad)
+	
+	OLR(model) = σ .* ((1 .- emissivity(model)) .* model.Tₛ.^4 + emissivity(model) .* model.Tₐ.^4)
+	OLR_obs = jldopen("observed_radiation.jld2")["OLR"]
 
-	return Tₛ
+	md""" 
+	## Incoming and Outgoing Radiation
+
+	Till now we also included a constant albedo of 0.2985 because it gave us the best fit with observations in an averaged global earth. 
+
+	But is an abledo of 0.2985 everywhere a good approximation when taking into account latitudinal dependency?
+
+	Let's look compare the observed Absorbed Shortwave Radiation (ASR) to the profile we use to force our model
+
+	$(current_figure())
+	**Figure**: comparison between ASR used to force the ZeroDModel and the observed ASR (from [NCEP reanalysis](https://psl.noaa.gov/data/gridded/data.ncep.reanalysis.html))
+
+	It seems like we are quite off! In particular, the ASR seems to be lower on the poles, suggesting that the albedo is higher in those regions!
+
+	Let's find the value of ``\alpha`` which approximates best the observed radiation!
+	To do so we have to assume a functional form for ``\alpha``. A useful function to do this is
+	```math
+	\alpha(\phi) = \alpha_0 + \frac{\alpha_1}{2}\left( 3\sin^2{\phi} - 1\right)
+	```
+	"""
+end
+
+# ╔═╡ 4640a179-3373-4901-ac31-31022e8c7eb2
+begin
+	complete_model_0D = ZeroDModel(; ε = varε, α = varα, ϕ)
+	evolve_model!(complete_model_0D, Δt = 50, stop_year = 100)
+
+	plot_latitudinal_variables!(ϕ, [model_lat.Tₛ .- 273, 
+									model_feedback.Tₛ .- 273,
+									complete_model_0D.Tₛ .- 273,
+									T_obs .- 273],
+									["radiative T",
+									 "ε feedback",
+									 "ε feedback and variable α",
+									 "observed T"],
+									[:red, :blue, :green, :black],
+								    [:solid, :solid, :solid, :dashdot],
+									ylims = (-70, 70))
+	
+	md"""
+	Let's take a look at our final latitudinal temperature model, complete of all bells and whistles
+
+	$(current_figure())
+
+	What is the problem here?
+	"""
 end
 
 # ╔═╡ a046b625-b046-4ca0-adde-be5249a420f4
-md""" κ $(@bind κ PlutoUI.Slider(0:0.01:1.0, show_value=true)) """
+md""" κ $(@bind κ_slider PlutoUI.Slider(0:0.01:1, show_value=true)) """
 
 # ╔═╡ 514ee86b-0aeb-42cd-b4cd-a795ed23b3de
 begin
-	T_1D = one_d_temperature_series(40, linear_feedback_ε, κ)
+	F = annual_mean_insolation.(ϕ)
 
-	# tit_str = @sprintf("equilibrium ΔT: %.2f ᵒC, feedback ΔT: %.2f ᵒC, diffusive ΔT: %.2f ᵒC", T_latitudinal[45] - T_latitudinal[1], T_feedback[45] - T_feedback[1], T_1D[end, 45] - T_1D[end, 1])
+	model_1D = OneDModel(ImplicitTimeStep(), length(F); κ = κ_slider, ε = varε, α = varα, Q = F)
+	
+	evolve_model!(model_1D, Δt = 50, stop_year = 100)
 
-	f10 = Figure(resolution = (800, 300))
-	a10 = Axis(f10[1, 1]) #, title = tit_str)
-	# lines!(a10, x, T_feedback .- 273.15)
-	lines!(a10, x, T_1D[end, :] .- 273.15)
-	ylims!(a10, (-60, 50))
+	
+	tem_new2 = [temp_new[1], temp_new[5], ]
+	lab_new2 = [lab_new[1], lab_new[5], "diffused T"]
+	col_new2 = [col_new[1], col_new[5], :purple]
+	sty_new2 = [sty_new[1], sty_new[5], :solid]
 
-	current_figure()
+	DTκ0 = complete_model_0D.Tₛ[45] - complete_model_0D.Tₛ[end]
+	DTκ1 = model_1D.Tₛ[45] - model_1D.Tₛ[end]
+	DTob = T_obs[45] - T_obs[end-6]
+
+	title = @sprintf("T(0ᵒ) - T(90ᵒ): %.2f (κ = 0), %.2f (κ = %.2f), %.2f (obs)", 
+					 DTκ0, DTκ1, κ_slider, DTob)
+	
+	plot_latitudinal_variables!(ϕ, [complete_model_0D.Tₛ .- 273, 
+									model_1D.Tₛ .- 273,
+									T_obs .- 273], 
+									["model with κ = 0",
+									 "model with κ = $κ_slider",
+									 "observed T"], 
+									[:blue, :blue, :black], 
+									[:dash, :solid, :dashdot];
+									ylims = (-70, 70), title)
+	
+	current_figure()	
 end
+
+# ╔═╡ 6534f98d-1270-4e7c-8ce8-66a6b1ee48f7
+begin
+
+	HF = model_1D.κₛ .* laplacian(model_1D.Tₛ, deg2rad(2), model_1D.ϕᶠ) 
+	lab_rad2 = ["modeled ASR", "observed ASR", "modeled OLR", "observed OLR", "HF"]
+	
+	plot_latitudinal_variables!(ϕ, [ASR(model_1D), 
+									ASR_obs, 
+									OLR(model_1D), 
+									OLR_obs, 
+									HF], 
+									["modeled ASR", "Observed ASR",
+									 "modeled OLR", "Observed OLR",
+									 "Heat transported"], 
+									[:red, :red, :blue, :blue, :green], 
+									[:solid, :dash, :solid, :dash, :solid],
+									ylabel = "Energy Budget Wm⁻²")
+
+	
+	md"""
+	What will this do in terms of OLR and ASR?
+
+	And what about heat flux?
+
+	$(current_figure())
+	"""
+end
+
+# ╔═╡ b0ca64b8-0211-4d1c-b007-7583bf8ac908
+md"""
+# Stability with diffusion
+
+Let's, once again, reduce the two equations to a more simple, 1D partial diffential equation, which only has diffusion
+
+You can imagine that the atmosphere stops, suddenly drops it's absorption coefficient to zero (all greenhouse gasses disappear), the heat then will only redistribute via tranport along the atmosphere.
+
+```math
+C \frac{\partial T}{\partial t} = K \frac{\partial^2 T}{\partial x^2}
+```
+
+```math
+C \frac{T^{(n+1)}_j - T^{(n)}_j}{\Delta t} = K \frac{T^{(n)}_{j+1} - 2T^{(n)}_j+ T^{(n)}_j}{\Delta x^2}
+```
+
+Imagine the temperature profile can be approximated by a spatial wave of wavenumber ``k``, i.e,
+```math
+T^{(n)}_j = \xi^{(n)}e^{ikx_j} \ , \ \ \ \ \text{where} \ \ \ \ x_j = j\Delta x
+```
+
+Let's substitute in the following equation and divide by ``\xi^{(n)}e^{ikj\Delta x}``
+```math
+\frac{C}{\Delta t} \left( \frac{\xi^{(n+1)}}{\xi^{(n)}} - 1\right) = K \frac{e^{ik \Delta x} - 2 + e^{- ik \Delta x}}{\Delta x^2}
+```
+
+we can use ``e^{i\theta} + e^{-i\theta} = 2\cos{\theta}`` and we get
+```math
+\frac{\xi^{(n+1)}}{\xi^{(n)}} = 1 +\frac{K \Delta t}{C\Delta x^2} \underbrace{\left( 2\cos{k\Delta x} - 2\right)}_{\text{between \ } -4 \text{ \ and \ } 0}
+```
+
+The worst case scenario occurs for wavenumbers ``k`` which give 
+```math
+\frac{\xi^{(n+1)}}{\xi^{(n)}} = 1 - 4\frac{K \Delta t}{C\Delta x^2} > 0
+```
+again, we want the amplitude to remain positive (otherwise heat transfer is flipped), so we must ensure that 
+```math
+\Delta t < \frac{C\Delta x^2}{4K}
+```
+In the previous case we had that at temperatures which were reasonable for the atmosphere, the limitation was in the tenth of days... \
+With diffusion (a reasonable parameter as we see is around 0.5) which means that K (in m²s⁻¹) is
+```math
+\frac{K}{C} = \frac{2\pi R^2 κ}{sec/day}\cdot \frac{1}{C} ≈ \frac{2 \pi \left(6\cdot 10^6\right)^2 \cdot 0.5}{86400} \cdot \frac{1}{115} \approx 1 \cdot 10^7
+```
+If we have a two degree resolution in the model (90 points), then ``\Delta x \approx 200`` km, which means that the condition on the time step is
+```math
+\Delta t < \frac{4\cdot 10^{10}}{4 \cdot 10^7}  = 1000 s
+```
+which is smaller than an hour!
+"""
 
 # ╔═╡ 51f3fd00-508b-4b42-bd95-ae19cb19b4db
 md"""
-## Variable albedo and Snowball earth
+## Snowball earth
 """
 
 # ╔═╡ 65dedef2-03e5-4e0f-8022-53168952e7a8
 begin 	
-	α_ϕ(ϕ) = 0.3 + 0.078 * 0.5 * (3 * sin(ϕ)^2 - 1)
-	α_feedback(ϕ, T) = T > 273.15 - 10.0 ? α_ϕ(ϕ) : 0.62
+	α_feedback(T, α) = T > 273.15 - 10.0 ? α : 0.62
+	κ = 0.5
+	α_model(model) = α_feedback.(model.Tₛ, varα)
 	
-	ϕᶜ(model) = 0.5*(model.ϕᶠ[2:end] .+ model.ϕᶠ[1:end-1])
-	α_model(model) = α_feedback.(ϕᶜ(model), model.Tₛ)
+	ice_line(model::OneDModel) = model.ϕᶠ[searchsortedlast(model.Tₛ, 273.15 - 10.0)]
 
-	T_1D_α_feedback = one_d_temperature_series(stop_year, ε, κ; α = α_model)
+	start_model = OneDModel(ImplicitTimeStep(), length(F); κ, ε = varε, α = α_model, Q = F)
 
-	tit_strα = @sprintf("equilibrium ΔT: %.2f ᵒC, feedback ΔT: %.2f ᵒC, diffusive ΔT: %.2f ᵒC", T_latitudinal[45] - T_latitudinal[1], T_feedback[45] - T_feedback[1], T_1D_α_feedback[end, 45] - T_1D_α_feedback[end, 1])
+	start_model.Tₛ .= model_1D.Tₛ
+	start_model.Tₐ .= model_1D.Tₐ
 
-	f10α = Figure(resolution = (800, 300))
-	a10α = Axis(f10α[1, 1], title = tit_strα)
-	lines!(a10α, x, T_feedback .- 273.15)
-	lines!(a10α, x, T_latitudinal .- 273.15)
-	lines!(a10α, x, T_1D[end, :] .- 273.15)
-	lines!(a10α, x, T_1D_α_feedback[end, :] .- 273.15, color = :red)
-	ylims!(a10α, (-60, 50))
+	evolve_model!(start_model, Δt = 50, stop_year = 150)
+	plot_latitudinal_variables!(ϕ, [tem_new2..., start_model.Tₛ .- 273.15], [lab_new2..., "feedback α"], [col_new2..., :green], [sty_new2..., :solid])
+
+
+	model_2 = OneDModel(ImplicitTimeStep(), length(F); κ, ε = varε, α = α_model, Q = F)
+
+	model_2.Tₛ .= start_model.Tₛ
+	model_2.Tₐ .= start_model.Tₐ
+
+	evolve_model!(model_2, Δt = 50, stop_year = 150)
+	plot_latitudinal_variables!(ϕ, [complete_model_0D.Tₛ .- 273, 
+									model_1D.Tₛ .- 273,
+									model_2.Tₛ .- 273,
+									T_obs .- 273], 
+									["model with κ = 0",
+									 "model with κ = $κ_slider",
+									 "model with α feedback",
+									 "observed T"], 
+									[:blue, :blue, :red, :black], 
+									[:dash, :solid, :solid, :dashdot];
+									ylims = (-70, 70))
+
 
 	current_figure()
 end
 
-# ╔═╡ 2c1ffabb-b7bd-467d-ada0-61cf3a9cbc4e
+# ╔═╡ ebcf224f-c006-4098-abf0-5c3644e2ee97
+md"""
+Let's look at the various rhs terms in the surface temperature equation
+"""
+
+# ╔═╡ 1c33dc21-04af-4139-9061-696db73c3249
 begin 
-	ice_line(model) = ϕᶜ(model)[searchsortedfirst(model.Tₛ, 263.15)] / π * 180
-	ASR(model) = @. (1 - albedo(model)) * model.Q
-	OLR(model) = @. σ * ((1 - absorpion(model)) * model.Tₛ^4 + emissivity(model) * model.Tₐ ^4)
+	S₀₁ = range(1300.0, 1450, length = 100)
+	ice_line_model = zeros(100)
+	for (idx, S₀) in enumerate(S₀₁[1])
+		F₂ = annual_mean_insolation.(ϕ; S₀)
+		model_tmp = OneDModel(ImplicitTimeStep(), length(F₂); κ, κₛ = κ, ε = varε, α = α_model, Q = F₂)
 
-	function evolve_model!(model, Nyears; Δt = 30) 
-		stop_time = (Nyears * 365) ÷ Δt # in 30days
+		model_tmp.Tₛ .= start_model.Tₛ
+		model_tmp.Tₐ .= start_model.Tₐ
 
-		stop_time = Int64(stop_time)
-	
-		@inbounds for step in 1:stop_time
-			time_step!(model, Δt)
-		end
+		evolve_model!(model_tmp, Δt = 50, stop_year = 150)
+
+		evolve_model!(model_tmp, Δt = 50, stop_year = 150)
+		ice_line_model[idx] = ice_line(model_tmp)
 	end
-end
-
-# ╔═╡ 92e5615f-9a48-468e-b94e-e16340e888de
-begin
-	F = annual_mean_insolation.(x)
 	
-	#initialize the model with 
-	mod_explicit = OneDModel(ExplicitTimeStep(), length(F); κ, ε, Q = F, α = α_model)
-	evolve_model!(mod_explicit, 1, Δt = 7.5)
-
-	mod_implicit = OneDModel(ImplicitTimeStep(), length(F); κ, ε, Q = F, α = α_model)
-	evolve_model!(mod_implicit, 1, Δt = 30.0)
-
-
-	ice_line(mod_implicit)
-	ftest = Figure()
-	atest = Axis(ftest[1, 1])
-	lines!(atest, x, mod_implicit.Tₛ)
-	lines!(atest, x, mod_explicit.Tₛ)
-
-	ylims!(atest, (220, 340))
+	lines(S₀₁, ice_line_model)
 	current_figure()
 end
 
@@ -1111,7 +1292,10 @@ end
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
+DataDeps = "124859b0-ceae-595e-8997-d05f6a7a8dfe"
+JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+Optim = "429524aa-4258-5aef-a3af-852621145aeb"
 Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
@@ -1119,6 +1303,9 @@ SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 
 [compat]
 CairoMakie = "~0.8.13"
+DataDeps = "~0.7.10"
+JLD2 = "~0.4.23"
+Optim = "~1.7.3"
 PlutoUI = "~0.7.40"
 """
 
@@ -1126,8 +1313,9 @@ PlutoUI = "~0.7.40"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.7.3"
+julia_version = "1.8.0"
 manifest_format = "2.0"
+project_hash = "ea85467796b3fdb4bcb113e03f41d1f23b1d0881"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra"]
@@ -1160,6 +1348,13 @@ version = "0.4.1"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
+version = "1.1.1"
+
+[[deps.ArrayInterfaceCore]]
+deps = ["LinearAlgebra", "SparseArrays", "SuiteSparse"]
+git-tree-sha1 = "5bb0f8292405a516880a3809954cb832ae7a31c5"
+uuid = "30b0a656-2188-435a-8636-2ec0e6a096e2"
+version = "0.1.20"
 
 [[deps.Artifacts]]
 uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
@@ -1178,6 +1373,11 @@ version = "1.0.1"
 
 [[deps.Base64]]
 uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
+
+[[deps.BitFlags]]
+git-tree-sha1 = "84259bb6172806304b9101094a7cc4bc6f56dbc6"
+uuid = "d1d4a3ce-64b1-5f1a-9ba4-7e7e69966f35"
+version = "0.1.5"
 
 [[deps.Bzip2_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1216,15 +1416,21 @@ version = "0.5.1"
 
 [[deps.ChainRulesCore]]
 deps = ["Compat", "LinearAlgebra", "SparseArrays"]
-git-tree-sha1 = "8a494fe0c4ae21047f28eb48ac968f0b8a6fcaa7"
+git-tree-sha1 = "dc4405cee4b2fe9e1108caec2d760b7ea758eca2"
 uuid = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
-version = "1.15.4"
+version = "1.15.5"
 
 [[deps.ChangesOfVariables]]
 deps = ["ChainRulesCore", "LinearAlgebra", "Test"]
 git-tree-sha1 = "38f7a08f19d8810338d4f5085211c7dfa5d5bdd8"
 uuid = "9e997f8a-9a97-42d5-a9f1-ce6bfc15e2c0"
 version = "0.1.4"
+
+[[deps.CodecZlib]]
+deps = ["TranscodingStreams", "Zlib_jll"]
+git-tree-sha1 = "ded953804d019afa9a3f98981d99b33e3db7b6da"
+uuid = "944b1d66-785c-5afd-91f1-9de20f533193"
+version = "0.7.0"
 
 [[deps.ColorBrewer]]
 deps = ["Colors", "JSON", "Test"]
@@ -1256,6 +1462,12 @@ git-tree-sha1 = "417b0ed7b8b838aa6ca0a87aadf1bb9eb111ce40"
 uuid = "5ae59095-9a9b-59fe-a467-6f913c188581"
 version = "0.12.8"
 
+[[deps.CommonSubexpressions]]
+deps = ["MacroTools", "Test"]
+git-tree-sha1 = "7b8a93dba8af7e3b42fecabf646260105ac373f7"
+uuid = "bbf7d656-a473-5ed7-a52c-81e309532950"
+version = "0.3.0"
+
 [[deps.Compat]]
 deps = ["Dates", "LinearAlgebra", "UUIDs"]
 git-tree-sha1 = "5856d3031cdb1f3b2b6340dfdc66b6d9a149a374"
@@ -1265,6 +1477,13 @@ version = "4.2.0"
 [[deps.CompilerSupportLibraries_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
+version = "0.5.2+0"
+
+[[deps.ConstructionBase]]
+deps = ["LinearAlgebra"]
+git-tree-sha1 = "fb21ddd70a051d882a1686a5a550990bbe371a95"
+uuid = "187b0558-2788-49d3-abe0-74a17ed4e7c9"
+version = "1.4.1"
 
 [[deps.Contour]]
 git-tree-sha1 = "d05d9e7b7aedff4e5b51a029dced05cfb6125781"
@@ -1275,6 +1494,12 @@ version = "0.6.2"
 git-tree-sha1 = "fb5f5316dd3fd4c5e7c30a24d50643b73e37cd40"
 uuid = "9a962f9c-6df0-11e9-0e5d-c546b8b5ee8a"
 version = "1.10.0"
+
+[[deps.DataDeps]]
+deps = ["HTTP", "Libdl", "Reexport", "SHA", "p7zip_jll"]
+git-tree-sha1 = "bc0a264d3e7b3eeb0b6fc9f6481f970697f29805"
+uuid = "124859b0-ceae-595e-8997-d05f6a7a8dfe"
+version = "0.7.10"
 
 [[deps.DataStructures]]
 deps = ["Compat", "InteractiveUtils", "OrderedCollections"]
@@ -1297,15 +1522,27 @@ git-tree-sha1 = "80c3e8639e3353e5d2912fb3a1916b8455e2494b"
 uuid = "b429d917-457f-4dbc-8f4c-0cc954292b1d"
 version = "0.4.0"
 
+[[deps.DiffResults]]
+deps = ["StaticArrays"]
+git-tree-sha1 = "c18e98cba888c6c25d1c3b048e4b3380ca956805"
+uuid = "163ba53b-c6d8-5494-b064-1a9d43ac40c5"
+version = "1.0.3"
+
+[[deps.DiffRules]]
+deps = ["IrrationalConstants", "LogExpFunctions", "NaNMath", "Random", "SpecialFunctions"]
+git-tree-sha1 = "992a23afdb109d0d2f8802a30cf5ae4b1fe7ea68"
+uuid = "b552c78f-8df3-52c6-915a-8e097449b14b"
+version = "1.11.1"
+
 [[deps.Distributed]]
 deps = ["Random", "Serialization", "Sockets"]
 uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 
 [[deps.Distributions]]
 deps = ["ChainRulesCore", "DensityInterface", "FillArrays", "LinearAlgebra", "PDMats", "Printf", "QuadGK", "Random", "SparseArrays", "SpecialFunctions", "Statistics", "StatsBase", "StatsFuns", "Test"]
-git-tree-sha1 = "8579b5cdae93e55c0cff50fbb0c2d1220efd5beb"
+git-tree-sha1 = "34a557ce10eb2d9142f4ef60726b4f17c1c30941"
 uuid = "31c24e10-a181-5473-b8eb-7969acd0382f"
-version = "0.25.70"
+version = "0.25.73"
 
 [[deps.DocStringExtensions]]
 deps = ["LibGit2"]
@@ -1316,6 +1553,7 @@ version = "0.9.1"
 [[deps.Downloads]]
 deps = ["ArgTools", "FileWatching", "LibCURL", "NetworkOptions"]
 uuid = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
+version = "1.6.0"
 
 [[deps.DualNumbers]]
 deps = ["Calculus", "NaNMath", "SpecialFunctions"]
@@ -1325,9 +1563,9 @@ version = "0.6.8"
 
 [[deps.EarCut_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "3f3a2501fa7236e9b911e0f7a588c657e822bb6d"
+git-tree-sha1 = "e3290f2d49e661fbd94046d7e3726ffcb2d41053"
 uuid = "5ae413db-bbd1-5e63-b57d-d24a61df00f5"
-version = "2.2.3+0"
+version = "2.2.4+0"
 
 [[deps.Expat_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1347,10 +1585,10 @@ uuid = "c87230d0-a227-11e9-1b43-d7ebe4e7570a"
 version = "0.4.1"
 
 [[deps.FFMPEG_jll]]
-deps = ["Artifacts", "Bzip2_jll", "FreeType2_jll", "FriBidi_jll", "JLLWrappers", "LAME_jll", "Libdl", "Ogg_jll", "OpenSSL_jll", "Opus_jll", "Pkg", "Zlib_jll", "libaom_jll", "libass_jll", "libfdk_aac_jll", "libvorbis_jll", "x264_jll", "x265_jll"]
-git-tree-sha1 = "ccd479984c7838684b3ac204b716c89955c76623"
+deps = ["Artifacts", "Bzip2_jll", "FreeType2_jll", "FriBidi_jll", "JLLWrappers", "LAME_jll", "Libdl", "Ogg_jll", "OpenSSL_jll", "Opus_jll", "PCRE2_jll", "Pkg", "Zlib_jll", "libaom_jll", "libass_jll", "libfdk_aac_jll", "libvorbis_jll", "x264_jll", "x265_jll"]
+git-tree-sha1 = "74faea50c1d007c85837327f6775bea60b5492dd"
 uuid = "b22a6f82-2f65-5046-a5b2-351ab43fb4e5"
-version = "4.4.2+0"
+version = "4.4.2+2"
 
 [[deps.FFTW]]
 deps = ["AbstractFFTs", "FFTW_jll", "LinearAlgebra", "MKL_jll", "Preferences", "Reexport"]
@@ -1379,6 +1617,12 @@ git-tree-sha1 = "87519eb762f85534445f5cda35be12e32759ee14"
 uuid = "1a297f60-69ca-5386-bcde-b61e274b549b"
 version = "0.13.4"
 
+[[deps.FiniteDiff]]
+deps = ["ArrayInterfaceCore", "LinearAlgebra", "Requires", "Setfield", "SparseArrays", "StaticArrays"]
+git-tree-sha1 = "5a2cff9b6b77b33b89f3d97a4d367747adce647e"
+uuid = "6a86dc24-6348-571c-b903-95158fe2bd41"
+version = "2.15.0"
+
 [[deps.FixedPointNumbers]]
 deps = ["Statistics"]
 git-tree-sha1 = "335bfdceacc84c5cdf16aadc768aa5ddfc5383cc"
@@ -1396,6 +1640,12 @@ deps = ["Printf"]
 git-tree-sha1 = "8339d61043228fdd3eb658d86c926cb282ae72a8"
 uuid = "59287772-0a20-5a39-b81b-1366585eb4c0"
 version = "0.4.2"
+
+[[deps.ForwardDiff]]
+deps = ["CommonSubexpressions", "DiffResults", "DiffRules", "LinearAlgebra", "LogExpFunctions", "NaNMath", "Preferences", "Printf", "Random", "SpecialFunctions", "StaticArrays"]
+git-tree-sha1 = "187198a4ed8ccd7b5d99c41b69c679269ea2b2d4"
+uuid = "f6369f11-7733-5829-9624-2563aa707210"
+version = "0.10.32"
 
 [[deps.FreeType]]
 deps = ["CEnum", "FreeType2_jll"]
@@ -1421,6 +1671,10 @@ git-tree-sha1 = "aa31987c2ba8704e23c6c8ba8a4f769d5d7e4f91"
 uuid = "559328eb-81f9-559d-9380-de523a88c83c"
 version = "1.0.10+0"
 
+[[deps.Future]]
+deps = ["Random"]
+uuid = "9fa8497b-333b-5362-9e8d-4d0656e87820"
+
 [[deps.GeoInterface]]
 deps = ["Extents"]
 git-tree-sha1 = "fb28b5dc239d0174d7297310ef7b84a11804dfab"
@@ -1429,9 +1683,9 @@ version = "1.0.1"
 
 [[deps.GeometryBasics]]
 deps = ["EarCut_jll", "GeoInterface", "IterTools", "LinearAlgebra", "StaticArrays", "StructArrays", "Tables"]
-git-tree-sha1 = "a7a97895780dab1085a97769316aa348830dc991"
+git-tree-sha1 = "12a584db96f1d460421d5fb8860822971cdb8455"
 uuid = "5c1252a2-5f33-56bf-86c9-59e7332b4326"
-version = "0.4.3"
+version = "0.4.4"
 
 [[deps.Gettext_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl", "Libiconv_jll", "Pkg", "XML2_jll"]
@@ -1467,6 +1721,12 @@ version = "0.9.0"
 git-tree-sha1 = "53bb909d1151e57e2484c3d1b53e19552b887fb2"
 uuid = "42e2da0e-8278-4e71-bc24-59509adca0fe"
 version = "1.0.2"
+
+[[deps.HTTP]]
+deps = ["Base64", "CodecZlib", "Dates", "IniFile", "Logging", "LoggingExtras", "MbedTLS", "NetworkOptions", "OpenSSL", "Random", "SimpleBufferStream", "Sockets", "URIs", "UUIDs"]
+git-tree-sha1 = "4abede886fcba15cd5fd041fef776b230d004cee"
+uuid = "cd3eb016-35fb-5094-929b-558a96fad6f3"
+version = "1.4.0"
 
 [[deps.HarfBuzz_jll]]
 deps = ["Artifacts", "Cairo_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll", "Graphite2_jll", "JLLWrappers", "Libdl", "Libffi_jll", "Pkg"]
@@ -1526,6 +1786,11 @@ git-tree-sha1 = "5cd07aab533df5170988219191dfad0519391428"
 uuid = "d25df0c9-e2be-5dd7-82c8-3ad0b3e990b9"
 version = "0.1.3"
 
+[[deps.IniFile]]
+git-tree-sha1 = "f550e6e32074c939295eb5ea6de31849ac2c9625"
+uuid = "83e8ac13-25f8-5344-8a64-a9f2b223428f"
+version = "0.5.1"
+
 [[deps.IntelOpenMP_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "d979e54b71da82f3a65b62553da4fc3d18c9004c"
@@ -1538,9 +1803,9 @@ uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
 
 [[deps.Interpolations]]
 deps = ["Adapt", "AxisAlgorithms", "ChainRulesCore", "LinearAlgebra", "OffsetArrays", "Random", "Ratios", "Requires", "SharedArrays", "SparseArrays", "StaticArrays", "WoodburyMatrices"]
-git-tree-sha1 = "64f138f9453a018c8f3562e7bae54edc059af249"
+git-tree-sha1 = "f67b55b6447d36733596aea445a9f119e83498b6"
 uuid = "a98d9a8b-a2ab-59e6-89dd-64a1c18fca59"
-version = "0.14.4"
+version = "0.14.5"
 
 [[deps.IntervalSets]]
 deps = ["Dates", "Random", "Statistics"]
@@ -1574,6 +1839,12 @@ version = "1.4.0"
 git-tree-sha1 = "a3f24677c21f5bbe9d2a714f95dcd58337fb2856"
 uuid = "82899510-4779-5014-852e-03e436cf321d"
 version = "1.0.0"
+
+[[deps.JLD2]]
+deps = ["FileIO", "MacroTools", "Mmap", "OrderedCollections", "Pkg", "Printf", "Reexport", "TranscodingStreams", "UUIDs"]
+git-tree-sha1 = "6c38bbe47948f74d63434abed68bdfc8d2c46b99"
+uuid = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
+version = "0.4.23"
 
 [[deps.JLLWrappers]]
 deps = ["Preferences"]
@@ -1634,10 +1905,12 @@ version = "0.3.1"
 [[deps.LibCURL]]
 deps = ["LibCURL_jll", "MozillaCACerts_jll"]
 uuid = "b27032c2-a3e7-50c8-80cd-2d36dbcbfd21"
+version = "0.6.3"
 
 [[deps.LibCURL_jll]]
 deps = ["Artifacts", "LibSSH2_jll", "Libdl", "MbedTLS_jll", "Zlib_jll", "nghttp2_jll"]
 uuid = "deac9b47-8bc7-5906-a0fe-35ac56dc84c0"
+version = "7.84.0+0"
 
 [[deps.LibGit2]]
 deps = ["Base64", "NetworkOptions", "Printf", "SHA"]
@@ -1646,6 +1919,7 @@ uuid = "76f85450-5226-5b5a-8eaa-529ad045b433"
 [[deps.LibSSH2_jll]]
 deps = ["Artifacts", "Libdl", "MbedTLS_jll"]
 uuid = "29816b5a-b9ab-546f-933c-edad1886dfa8"
+version = "1.10.2+0"
 
 [[deps.Libdl]]
 uuid = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
@@ -1686,6 +1960,12 @@ git-tree-sha1 = "7f3efec06033682db852f8b3bc3c1d2b0a0ab066"
 uuid = "38a345b3-de98-5d2b-a5d3-14cd9215e700"
 version = "2.36.0+0"
 
+[[deps.LineSearches]]
+deps = ["LinearAlgebra", "NLSolversBase", "NaNMath", "Parameters", "Printf"]
+git-tree-sha1 = "7bbea35cec17305fc70a0e5b4641477dc0789d9d"
+uuid = "d3d80556-e9d4-5f37-9878-2ab0fcc64255"
+version = "7.2.0"
+
 [[deps.LinearAlgebra]]
 deps = ["Libdl", "libblastrampoline_jll"]
 uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
@@ -1699,11 +1979,23 @@ version = "0.3.18"
 [[deps.Logging]]
 uuid = "56ddb016-857b-54e1-b83d-db4d58db5568"
 
+[[deps.LoggingExtras]]
+deps = ["Dates", "Logging"]
+git-tree-sha1 = "5d4d2d9904227b8bd66386c1138cf4d5ffa826bf"
+uuid = "e6f89c97-d47a-5376-807f-9c37f3926c36"
+version = "0.4.9"
+
 [[deps.MKL_jll]]
 deps = ["Artifacts", "IntelOpenMP_jll", "JLLWrappers", "LazyArtifacts", "Libdl", "Pkg"]
 git-tree-sha1 = "41d162ae9c868218b1f3fe78cba878aa348c2d26"
 uuid = "856f044c-d86e-5d09-b602-aeab76dc8ba7"
 version = "2022.1.0+0"
+
+[[deps.MacroTools]]
+deps = ["Markdown", "Random"]
+git-tree-sha1 = "3d3e902b31198a27340d0bf00d6ac452866021cf"
+uuid = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
+version = "0.5.9"
 
 [[deps.Makie]]
 deps = ["Animations", "Base64", "ColorBrewer", "ColorSchemes", "ColorTypes", "Colors", "Contour", "Distributions", "DocStringExtensions", "FFMPEG", "FileIO", "FixedPointNumbers", "Formatting", "FreeType", "FreeTypeAbstraction", "GeometryBasics", "GridLayoutBase", "ImageIO", "IntervalSets", "Isoband", "KernelDensity", "LaTeXStrings", "LinearAlgebra", "MakieCore", "Markdown", "Match", "MathTeXEngine", "Observables", "OffsetArrays", "Packing", "PlotUtils", "PolygonOps", "Printf", "Random", "RelocatableFolders", "Serialization", "Showoff", "SignedDistanceFields", "SparseArrays", "Statistics", "StatsBase", "StatsFuns", "StructArrays", "UnicodeFun"]
@@ -1737,9 +2029,16 @@ git-tree-sha1 = "114ef48a73aea632b8aebcb84f796afcc510ac7c"
 uuid = "0a4f8689-d25c-4efe-a92b-7142dfc1aa53"
 version = "0.4.3"
 
+[[deps.MbedTLS]]
+deps = ["Dates", "MbedTLS_jll", "MozillaCACerts_jll", "Random", "Sockets"]
+git-tree-sha1 = "6872f9594ff273da6d13c7c1a1545d5a8c7d0c1c"
+uuid = "739be429-bea8-5141-9913-cc70e7f3736d"
+version = "1.1.6"
+
 [[deps.MbedTLS_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "c8ffd9c3-330d-5841-b78e-0817d7145fa1"
+version = "2.28.0+0"
 
 [[deps.Missings]]
 deps = ["DataAPI"]
@@ -1758,6 +2057,13 @@ version = "0.3.3"
 
 [[deps.MozillaCACerts_jll]]
 uuid = "14a3606d-f60d-562e-9121-12d972cd8159"
+version = "2022.2.1"
+
+[[deps.NLSolversBase]]
+deps = ["DiffResults", "Distributed", "FiniteDiff", "ForwardDiff"]
+git-tree-sha1 = "50310f934e55e5ca3912fb941dec199b49ca9b68"
+uuid = "d41bc354-129a-5804-8e4c-c37616107c6c"
+version = "7.8.2"
 
 [[deps.NaNMath]]
 deps = ["OpenLibm_jll"]
@@ -1773,6 +2079,7 @@ version = "1.0.2"
 
 [[deps.NetworkOptions]]
 uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
+version = "1.2.0"
 
 [[deps.Observables]]
 git-tree-sha1 = "dfd8d34871bc3ad08cd16026c1828e271d554db9"
@@ -1794,6 +2101,7 @@ version = "1.3.5+1"
 [[deps.OpenBLAS_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
 uuid = "4536629a-c528-5b80-bd46-f80d51c5b363"
+version = "0.3.20+0"
 
 [[deps.OpenEXR]]
 deps = ["Colors", "FileIO", "OpenEXR_jll"]
@@ -1810,6 +2118,13 @@ version = "3.1.1+0"
 [[deps.OpenLibm_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "05823500-19ac-5b8b-9628-191a04bc5112"
+version = "0.8.1+0"
+
+[[deps.OpenSSL]]
+deps = ["BitFlags", "Dates", "MozillaCACerts_jll", "OpenSSL_jll", "Sockets"]
+git-tree-sha1 = "02be9f845cb58c2d6029a6d5f67f4e0af3237814"
+uuid = "4d8831e6-92b7-49fb-bdf8-b643e874388c"
+version = "1.1.3"
 
 [[deps.OpenSSL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1823,6 +2138,12 @@ git-tree-sha1 = "13652491f6856acfd2db29360e1bbcd4565d04f1"
 uuid = "efe28fd5-8261-553b-a9e1-b2916fc3738e"
 version = "0.5.5+0"
 
+[[deps.Optim]]
+deps = ["Compat", "FillArrays", "ForwardDiff", "LineSearches", "LinearAlgebra", "NLSolversBase", "NaNMath", "Parameters", "PositiveFactorizations", "Printf", "SparseArrays", "StatsBase"]
+git-tree-sha1 = "b9fe76d1a39807fdcf790b991981a922de0c3050"
+uuid = "429524aa-4258-5aef-a3af-852621145aeb"
+version = "1.7.3"
+
 [[deps.Opus_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "51a08fb14ec28da2ec7a927c4337e4332c2a4720"
@@ -1833,6 +2154,11 @@ version = "1.3.2+0"
 git-tree-sha1 = "85f8e6578bf1f9ee0d11e7bb1b1456435479d47c"
 uuid = "bac558e1-5e72-5ebc-8fee-abe8a469f55d"
 version = "1.4.1"
+
+[[deps.PCRE2_jll]]
+deps = ["Artifacts", "Libdl"]
+uuid = "efcefdf7-47ab-520b-bdef-62a2eaa19f15"
+version = "10.40.0+0"
 
 [[deps.PCRE_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1870,6 +2196,12 @@ git-tree-sha1 = "3a121dfbba67c94a5bec9dde613c3d0cbcf3a12b"
 uuid = "36c8627f-9965-5494-a995-c6b170f724f3"
 version = "1.50.3+0"
 
+[[deps.Parameters]]
+deps = ["OrderedCollections", "UnPack"]
+git-tree-sha1 = "34c0e9ad262e5f7fc75b10a9952ca7692cfc5fbe"
+uuid = "d96e819e-fc66-5662-9728-84c9c7592b0a"
+version = "0.12.3"
+
 [[deps.Parsers]]
 deps = ["Dates"]
 git-tree-sha1 = "3d5bf43e3e8b412656404ed9466f1dcbf7c50269"
@@ -1885,6 +2217,7 @@ version = "0.40.1+0"
 [[deps.Pkg]]
 deps = ["Artifacts", "Dates", "Downloads", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "REPL", "Random", "SHA", "Serialization", "TOML", "Tar", "UUIDs", "p7zip_jll"]
 uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
+version = "1.8.0"
 
 [[deps.PkgVersion]]
 deps = ["Pkg"]
@@ -1893,10 +2226,10 @@ uuid = "eebad327-c553-4316-9ea0-9fa01ccd7688"
 version = "0.3.2"
 
 [[deps.PlotUtils]]
-deps = ["ColorSchemes", "Colors", "Dates", "Printf", "Random", "Reexport", "Statistics"]
-git-tree-sha1 = "9888e59493658e476d3073f1ce24348bdc086660"
+deps = ["ColorSchemes", "Colors", "Dates", "Printf", "Random", "Reexport", "SnoopPrecompile", "Statistics"]
+git-tree-sha1 = "21303256d239f6b484977314674aef4bb1fe4420"
 uuid = "995b91a9-d308-5afd-9ec6-746e21dbc043"
-version = "1.3.0"
+version = "1.3.1"
 
 [[deps.PlutoUI]]
 deps = ["AbstractPlutoDingetjes", "Base64", "ColorTypes", "Dates", "Hyperscript", "HypertextLiteral", "IOCapture", "InteractiveUtils", "JSON", "Logging", "Markdown", "Random", "Reexport", "UUIDs"]
@@ -1908,6 +2241,12 @@ version = "0.7.40"
 git-tree-sha1 = "77b3d3605fc1cd0b42d95eba87dfcd2bf67d5ff6"
 uuid = "647866c9-e3ac-4575-94e7-e3d426903924"
 version = "0.1.2"
+
+[[deps.PositiveFactorizations]]
+deps = ["LinearAlgebra"]
+git-tree-sha1 = "17275485f373e6673f7e7f97051f703ed5b15b20"
+uuid = "85a6dd25-e78a-55b7-8502-1745935b8125"
+version = "0.2.4"
 
 [[deps.Preferences]]
 deps = ["TOML"]
@@ -1982,6 +2321,7 @@ version = "0.3.0+0"
 
 [[deps.SHA]]
 uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
+version = "0.7.0"
 
 [[deps.SIMD]]
 git-tree-sha1 = "7dbc15af7ed5f751a82bf3ed37757adf76c32402"
@@ -2003,6 +2343,12 @@ version = "1.1.1"
 [[deps.Serialization]]
 uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
 
+[[deps.Setfield]]
+deps = ["ConstructionBase", "Future", "MacroTools", "StaticArraysCore"]
+git-tree-sha1 = "e2cc6d8c88613c05e1defb55170bf5ff211fbeac"
+uuid = "efcf1570-3423-57d1-acb7-fd33fddbac46"
+version = "1.1.1"
+
 [[deps.SharedArrays]]
 deps = ["Distributed", "Mmap", "Random", "Serialization"]
 uuid = "1a1011a3-84de-559e-8e89-a11a2f7dc383"
@@ -2019,11 +2365,21 @@ git-tree-sha1 = "d263a08ec505853a5ff1c1ebde2070419e3f28e9"
 uuid = "73760f76-fbc4-59ce-8f25-708e95d2df96"
 version = "0.4.0"
 
+[[deps.SimpleBufferStream]]
+git-tree-sha1 = "874e8867b33a00e784c8a7e4b60afe9e037b74e1"
+uuid = "777ac1f9-54b0-4bf8-805c-2214025038e7"
+version = "1.1.0"
+
 [[deps.Sixel]]
 deps = ["Dates", "FileIO", "ImageCore", "IndirectArrays", "OffsetArrays", "REPL", "libsixel_jll"]
 git-tree-sha1 = "8fb59825be681d451c246a795117f317ecbcaa28"
 uuid = "45858cf5-a6b0-47a3-bbea-62219f50df47"
 version = "0.1.2"
+
+[[deps.SnoopPrecompile]]
+git-tree-sha1 = "f604441450a3c0569830946e5b33b78c928e1a85"
+uuid = "66db9d55-30c0-4569-8b51-7e840670fc0c"
+version = "1.0.1"
 
 [[deps.Sockets]]
 uuid = "6462fe0b-24de-5631-8697-dd941f90decc"
@@ -2052,9 +2408,9 @@ version = "0.1.1"
 
 [[deps.StaticArrays]]
 deps = ["LinearAlgebra", "Random", "StaticArraysCore", "Statistics"]
-git-tree-sha1 = "dfec37b90740e3b9aa5dc2613892a3fc155c3b42"
+git-tree-sha1 = "efa8acd030667776248eabb054b1836ac81d92f0"
 uuid = "90137ffa-7385-5640-81b9-e52037218182"
-version = "1.5.6"
+version = "1.5.7"
 
 [[deps.StaticArraysCore]]
 git-tree-sha1 = "ec2bd695e905a3c755b33026954b119ea17f2d22"
@@ -2096,6 +2452,7 @@ uuid = "4607b0f0-06f3-5cda-b6b1-a6196a1729e9"
 [[deps.TOML]]
 deps = ["Dates"]
 uuid = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
+version = "1.0.0"
 
 [[deps.TableTraits]]
 deps = ["IteratorInterfaceExtensions"]
@@ -2105,13 +2462,14 @@ version = "1.0.1"
 
 [[deps.Tables]]
 deps = ["DataAPI", "DataValueInterfaces", "IteratorInterfaceExtensions", "LinearAlgebra", "OrderedCollections", "TableTraits", "Test"]
-git-tree-sha1 = "5ce79ce186cc678bbb5c5681ca3379d1ddae11a1"
+git-tree-sha1 = "7149a60b01bf58787a1b83dad93f90d4b9afbe5d"
 uuid = "bd369af6-aec1-5ad0-b16a-f7cc5008161c"
-version = "1.7.0"
+version = "1.8.1"
 
 [[deps.Tar]]
 deps = ["ArgTools", "SHA"]
 uuid = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
+version = "1.10.0"
 
 [[deps.TensorCore]]
 deps = ["LinearAlgebra"]
@@ -2140,9 +2498,19 @@ git-tree-sha1 = "6bac775f2d42a611cdfcd1fb217ee719630c4175"
 uuid = "410a4b4d-49e4-4fbc-ab6d-cb71b17b3775"
 version = "0.1.6"
 
+[[deps.URIs]]
+git-tree-sha1 = "e59ecc5a41b000fa94423a578d29290c7266fc10"
+uuid = "5c2747f8-b7ea-4ff2-ba2e-563bfd36b1d4"
+version = "1.4.0"
+
 [[deps.UUIDs]]
 deps = ["Random", "SHA"]
 uuid = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
+
+[[deps.UnPack]]
+git-tree-sha1 = "387c1f73762231e86e0c9c5443ce3b4a0a9a0c2b"
+uuid = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"
+version = "1.0.2"
 
 [[deps.Unicode]]
 uuid = "4ec0a83e-493e-50e2-b9ac-8f72acf5a8f5"
@@ -2222,6 +2590,7 @@ version = "1.4.0+3"
 [[deps.Zlib_jll]]
 deps = ["Libdl"]
 uuid = "83775a58-1f1d-513f-b197-d71354ab007a"
+version = "1.2.12+3"
 
 [[deps.isoband_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -2244,6 +2613,7 @@ version = "0.15.1+0"
 [[deps.libblastrampoline_jll]]
 deps = ["Artifacts", "Libdl", "OpenBLAS_jll"]
 uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
+version = "5.1.1+0"
 
 [[deps.libfdk_aac_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -2258,10 +2628,10 @@ uuid = "b53b4c65-9356-5827-b1ea-8c7a1a84506f"
 version = "1.6.38+0"
 
 [[deps.libsixel_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "78736dab31ae7a53540a6b752efc61f77b304c5b"
+deps = ["Artifacts", "JLLWrappers", "JpegTurbo_jll", "Libdl", "Pkg", "libpng_jll"]
+git-tree-sha1 = "d4f63314c8aa1e48cd22aa0c17ed76cd1ae48c3c"
 uuid = "075b6546-f08a-558a-be8f-8157d0f608a5"
-version = "1.8.6+1"
+version = "1.10.3+0"
 
 [[deps.libvorbis_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Ogg_jll", "Pkg"]
@@ -2272,10 +2642,12 @@ version = "1.3.7+1"
 [[deps.nghttp2_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "8e850ede-7688-5339-a07c-302acd2aaf8d"
+version = "1.48.0+0"
 
 [[deps.p7zip_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
+version = "17.4.0+0"
 
 [[deps.x264_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -2291,21 +2663,18 @@ version = "3.5.0+0"
 """
 
 # ╔═╡ Cell order:
-# ╠═b5e260ed-3cda-405f-8b0a-87a725d6c098
-# ╟─4cb13d08-2eb3-11ed-01ec-b91fde7e11d0
+# ╟─b5e260ed-3cda-405f-8b0a-87a725d6c098
 # ╟─cfb8f979-37ca-40ab-8d3c-0053911717e7
 # ╟─48fdc79f-a5da-4e70-b813-77c5c3b72acf
 # ╟─a16912cc-10a9-44b7-884e-e415ffd20a5d
 # ╟─52d35593-b841-4c76-8657-0f0f5c9b2f85
 # ╟─75cacd05-c9f8-44ba-a0ce-8cde93fc8b85
 # ╠═18ddf155-f9bc-4e5b-97dc-762fa83c9931
-# ╟─eae88c46-a8b6-4d3f-a9cb-07ce7c0e9ceb
 # ╟─87fdc7c2-536e-4aa1-9f68-8aec4bc7069d
 # ╟─8d4d8b93-ebfe-41ff-8b9e-f8931a9e83c2
-# ╟─f2f582f4-f6f3-486a-9e50-10430700df8c
 # ╟─25223f7b-22f7-46c2-9270-4430eb6c186e
 # ╟─034fc483-b188-4b2a-891a-61b76c74072d
-# ╠═039ec632-d238-4e63-81fc-a3225ccd2aee
+# ╟─039ec632-d238-4e63-81fc-a3225ccd2aee
 # ╟─5d31e2a8-e357-4479-bc48-de1a1b8bc4d4
 # ╟─724901e9-a19a-4d5f-aa6a-79ec0f230f24
 # ╠═1431b11f-7838-41da-92e3-bcca9f4215b3
@@ -2315,35 +2684,33 @@ version = "3.5.0+0"
 # ╠═c0ff6c61-c4be-462b-a91c-0ee1395ef584
 # ╟─049e2164-24ac-467c-9d96-77510ac6ff57
 # ╠═f07006ac-c773-4829-9a38-6f9991403386
-# ╟─a1f3a48e-827b-4a99-8898-4ff6c418426e
-# ╠═00776863-2260-48a8-83c1-3f2696f11d96
+# ╟─b85fdf41-ef8f-4314-bc3c-383947b9f02c
+# ╟─00776863-2260-48a8-83c1-3f2696f11d96
 # ╟─16ca594c-c9db-4528-aa65-bab12cb6e22a
-# ╠═6b770afa-bf99-49eb-9489-367d9de58780
+# ╟─6b770afa-bf99-49eb-9489-367d9de58780
 # ╠═fd14e483-94a4-4a8b-8ca5-0eb24d487e4a
-# ╠═4780c8cb-f037-4fcf-aaa5-5394db04e0b2
-# ╠═56b4c7c0-65e4-4b0c-b0b3-d305308a90e7
-# ╠═f6bbaaf8-cc5b-43fc-817b-b6d6e37941b0
-# ╠═7246e5f1-e5ab-43ba-ac3c-35dcf04e540c
 # ╟─140bcdac-4145-47b3-952f-bfe50f6ed41c
-# ╠═1d8a69b7-52db-4865-8bf2-712c2b6442f5
-# ╟─0839c1b1-9afa-4b88-8123-49e5eeae6b89
-# ╠═de7a09c6-068b-4282-b416-db5f31c4a880
-# ╟─8f963bc5-1900-426d-ba1f-078ed45b48d3
+# ╟─4d517df8-0496-40a2-8e44-5beda6cd7226
+# ╟─6932b969-0760-4f09-935a-478ac56de262
+# ╟─1d8a69b7-52db-4865-8bf2-712c2b6442f5
+# ╟─5884999f-f136-4ae7-8831-cc3a36f50a98
+# ╟─fa7d8bbd-c023-4d94-a78a-d3b3223b023f
+# ╟─69acab94-5daf-4a24-9075-98126fadc166
+# ╟─1a4d9e1b-a8b3-40ec-b4d9-84caa7d43a1d
+# ╟─4640a179-3373-4901-ac31-31022e8c7eb2
+# ╠═8f963bc5-1900-426d-ba1f-078ed45b48d3
 # ╟─0d8fffdc-a9f5-4d82-84ec-0f27acc04c21
 # ╠═930935f8-832a-45b4-8e5e-b194afa917c6
-# ╠═671acae8-7c7b-4cda-82f6-27c48e7a72c8
-# ╠═2176bf50-8ae1-46d2-aa50-0176b24e6e74
-# ╠═430e73b6-33a5-4149-b090-926571adabb2
 # ╠═71cff056-a36c-4fd4-babb-53018894ac5c
-# ╠═ddc5ee3b-ac31-4a37-80dc-1a1c9f1ad939
 # ╠═7c7439f0-d678-4b68-a5e5-bee650fa17e2
 # ╠═9a5ac384-f5e6-41b0-8bc4-44e2ed6be472
-# ╠═1ff2446f-ba0c-41be-b569-f4dfe2f1fce8
-# ╠═a046b625-b046-4ca0-adde-be5249a420f4
-# ╠═514ee86b-0aeb-42cd-b4cd-a795ed23b3de
+# ╟─a046b625-b046-4ca0-adde-be5249a420f4
+# ╟─514ee86b-0aeb-42cd-b4cd-a795ed23b3de
+# ╠═6534f98d-1270-4e7c-8ce8-66a6b1ee48f7
+# ╟─b0ca64b8-0211-4d1c-b007-7583bf8ac908
 # ╟─51f3fd00-508b-4b42-bd95-ae19cb19b4db
-# ╠═65dedef2-03e5-4e0f-8022-53168952e7a8
-# ╠═2c1ffabb-b7bd-467d-ada0-61cf3a9cbc4e
-# ╠═92e5615f-9a48-468e-b94e-e16340e888de
+# ╟─65dedef2-03e5-4e0f-8022-53168952e7a8
+# ╟─ebcf224f-c006-4098-abf0-5c3644e2ee97
+# ╠═1c33dc21-04af-4139-9061-696db73c3249
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
