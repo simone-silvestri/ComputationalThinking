@@ -50,7 +50,7 @@ begin
 	"> <p style="
 	font-size: 1.5rem;
 	opacity: .8;
-	"><em>Section 2.3 and 2.4</em></p>
+	"><em>Sections 2.3 and 2.4</em></p>
 	<p style="text-align: center; font-size: 2rem;">
 	<em> Climate models: solving the climate system in Julia </em>
 	</p>
@@ -71,30 +71,30 @@ md"""
 md"""
 ## Variable insolation
 
-Let us introduce some variability in our climate system. We can express the global, annual averaged radiative flux that reaches earth with
+Let us introduce some variability in our climate system. The variability is imposed on the system by the forcing. You already saw that the spatially and annual averaged radiative flux that reaches the earth is
 ```math
-\pi R^2 S_0 , \ \ \ \ \text{with} \ \ \ \ S_0 \approx 1365 \ W m^{-2}
+S_0 / 4 , \ \ \ \ \text{with} \ \ \ \ S_0 \approx 1365 \ W m^{-2}
 ```
-of which, only ``(1 - \alpha)`` is absorbed. This flux is not distributed equally along the surface of the planet. The insolation amount and intensity vary during a day, season, and year. \
+of which only ``(1 - \alpha)`` is absorbed (where ``alpha`` is the albedo (or reflectivity) of the surface). This flux is not distributed equally along the surface of the planet. The insolation amount and intensity vary in different locations, days, seasons, and years. \
 
 Three main parameters affect the intensity of the incoming solar radiation:
 
-- the hour in the day
-- the season of the year
 - the latitude
+- the hour of the day
+- the day of the year
 
-You have seen this: 
+You have seen a reduced model that looks like this 
 
 $(Resource("https://raw.githubusercontent.com/simone-silvestri/ComputationalThinking/main/sun-earth-system-0d.png", :height => 80))
-**Figure**: 0D model in which the earth is modeled as a "point", the incoming radiation ``S_0 / 4 (1 - \alpha)``
+**Figure**: 0D model in which the earth is modeled as a "point", the incoming radiation is ``S_0(1 - \alpha)/4``
 
-This is the full picture:
+while the full picture looks more like this
 
 $(Resource("https://raw.githubusercontent.com/simone-silvestri/ComputationalThinking/main/sun-earth-system.png", :height => 100))
 **Figure**: 3D model with variations in hours/day/season
 
-In practice we will not look at all these dependencies but we will average out everything that happens in a day and in a year, remaining a 1D model which solves for time and latitude direction
-
+In practice, we will simplify the system by averaging the dependencies on hour and day. What remains is a 1D model which depends on time and latitude.
+Let us explore how to accurately model the insolation depending on those three parameters.
 """
 
 # ╔═╡ eb95e773-b12a-40a4-a4f1-9dced86fc8a2
@@ -146,7 +146,8 @@ $(Resource("https://ars.els-cdn.com/content/image/3-s2.0-B9780128121498000028-f0
 
 The cosine of the zenith angle is the useful percentage of ``S_0`` which strikes the earth's surface.
 What does the first term on the right-hand side express? And the second?
-Of course, negative insolation does not exist... negative values of ``\cos{\theta_z}`` indicate nighttime, for which ``Q=0``. Sunrise and sunset occur when ``cos(\theta_z) = 0``, then the sunset (and sunrise) hour angle (``h_{ss}``) depends on declination and latitude as follows
+Negative insolation does not exist... so negative values of ``\cos{\theta_z}`` indicate night-time, for which ``Q=0``. When ``cos(\theta_z)`` is exactly equal to zero, we are at sunset or sunrise.
+We can calculate the sunset (and sunrise) hour angle (``h_{ss}``) as follows
 ```math
 \cos{h_{ss}} = - \tan{\phi}\tan{\delta}
 ```
@@ -710,7 +711,7 @@ md"""
 
 # ╔═╡ 8f963bc5-1900-426d-ba1f-078ed45b48d3
 md"""
-# Global atmospheric circulation
+### Global atmospheric circulation
 
 The earth receives almost all of its energy from the sun. The earth in turn radiates back to space the energy received from the sun. As a result, the earth neither warms up nor does it get cooled over a period of time. Thus, the amount of heat received by different parts of the earth is not the same. This variation causes pressure differences in the atmosphere. This leads to transfer of heat from one region to the other by winds. This chapter explains the process of heating and cooling of the atmosphere and the resultant temperature distribution over the earth’s surface.
 
@@ -922,7 +923,7 @@ end
 
 # ╔═╡ 1cef338d-5c4a-4ea5-98d7-9ac4f11922f3
 md"""
-### Explicit time stepping
+### Coding explicit time stepping with diffusion
 
 Coding the explicit time stepping won't be too different than what we did with the ODE. \ 
 We define the tendencies and add the explicit diffusion term calculated as above. \
@@ -972,7 +973,7 @@ end
 
 # ╔═╡ 83be4f9d-6c85-4e5b-9379-00618c9e39be
 md"""
-### Implicit Time Stepping
+### Coding implicit time stepping with diffusion
 
 to code an implicit time stepping method, we can reutilize the matrix we used before (the sources and interexchange terms do not change!)
 
@@ -1357,7 +1358,7 @@ end
 
 # ╔═╡ b0ca64b8-0211-4d1c-b007-7583bf8ac908
 md"""
-# Stability with diffusion
+## Stability with diffusion
 
 Let's, once again, reduce the two equations to a more simple, 1D partial diffential equation, which only has a diffusion term
 
@@ -2912,7 +2913,7 @@ version = "3.5.0+0"
 # ╟─4640a179-3373-4901-ac31-31022e8c7eb2
 # ╟─d13c319d-345a-40b8-b90d-b0b226225434
 # ╟─901548f8-a6c9-48f8-9c8f-887500081316
-# ╟─8f963bc5-1900-426d-ba1f-078ed45b48d3
+# ╠═8f963bc5-1900-426d-ba1f-078ed45b48d3
 # ╟─567fa8d3-35b4-40d7-8404-ae78d2874380
 # ╟─0d8fffdc-a9f5-4d82-84ec-0f27acc04c21
 # ╠═930935f8-832a-45b4-8e5e-b194afa917c6
