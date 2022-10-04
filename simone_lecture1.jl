@@ -274,7 +274,7 @@ end
 md"""
 ## Solving the climate system: equilibrium solution
 
-Let us remember the system of ODE we defined that governs the surface and atmospheric temperature. \
+Let us recall the system of ODE we defined that governs the surface and atmospheric temperature. \
 The forcing will now be latitude-dependent, giving a latitude-dependent temperature
 
 ```math
@@ -283,9 +283,7 @@ C_a \frac{d T_a}{dt} & = \varepsilon \sigma T_s ^4 - 2\varepsilon \sigma T_a^4 \
 C_s \frac{d T_s}{dt} & = \varepsilon \sigma T_a^4 - \sigma T_s ^4 + (1 - \alpha)  Q(\phi)
 \end{align}
 ```
-
-(Q is the yearly averaged latitudinal forcing)
-The system is at equilibrium when all the derivatives in time are zero \
+Here ``T_s`` is the surface (or ocean) temperature, ``T_a`` is the atmospheric temperature, ``\varepsilon`` in the emissivity of the atmosphere, ``\alpha`` is the earth's albedo and ``C_s`` and ``C_a`` are the heat capacities of the surface and atmosphere, respectively. ``Q(\phi)`` is the yearly averaged latitudinal insolation.  The system is at equilibrium when all the derivatives in time are zero \
 (i.e the system does not evolve in time anymore)
 ```math
 \begin{align}
@@ -307,7 +305,7 @@ which yields
 md"""
 ## Solving the climate system: numerical solution
 
-The equilibrium solution is good, but it is good to keep the time derivative to see the evolution in case the forcing changes. To do this we can solve our system of ODEs numerically.
+The equilibrium solution is a good approximation, but the climate is always evolving, so it is important to be able to solve the ODE system. The problem is too complicated to be solved analytically, but we can easily solve it numerically. A numerical solution of a differential equation is an approximation of the analytical solution usually computed by _discretizing_ the derivatives.
 
 Let's see how to do this with two different methods:
 - explicit time stepping
