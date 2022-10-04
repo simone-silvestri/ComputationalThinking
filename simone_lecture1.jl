@@ -414,7 +414,7 @@ md"""
 We can start creating a ```struct``` that contains the information we need, i.e., the parameters of the system, the state of the system and the solution method
 
 Some comments: 
-- Temperature (and forcing) can be either a Scalar or a Vector
+- Temperature (and forcing) are vectors depending on the discrete latitude grid ``\phi``
 - To retrieve parameters of the `struct` it is useful to write functions that we can later extend
 - It is convenient to write a constructor with some default values and a `show` method 
 """
@@ -496,7 +496,7 @@ begin
 		Cₛ :: C       # surface heat capacity
 		Cₐ :: C       # atmospheric heat capacity
 	end
-
+	
 	# Types that specify the time stepping method
 	struct ExplicitTimeStep end
 	struct ImplicitTimeStep end
@@ -526,10 +526,10 @@ begin
 	end
 
 	# A constructor with some defaults...
-	function ZeroDModel(step=ImplicitTimeStep(); 
-						ε=0.75, 
-					    α=0.2985, 
-						ϕ=range(-89.0, 89.0,length=90))
+	function ZeroDModel(step = ImplicitTimeStep(); 
+						ε = 0.75, 
+					    α = 0.2985, 
+						ϕ = range(-89.0, 89.0,length=90))
 		N = length(ϕ)
 		Q = annual_mean_insolation.(ϕ)
 		Tₛ_init = 200.0 .* ones(N)
@@ -549,7 +549,7 @@ ZeroDModel(ϕ = 45)
 	md"""
 	What happens if we change latitude (``\phi``)? \
 	And if we change ``\varepsilon`` or ``\alpha``? \
-	And if we increase our Δt? \
+	And if we increase our Δt? (hint: try increasing Δt with high ``\varepsilon`` and low ``\alpha``)
 
 	
 	``\varepsilon`` $(
@@ -578,9 +578,7 @@ md"""
 
 why did the temperature explode with a large time step? \
 
-Let's analyze this by simplifying a bit our discretized atmospheric equation \
-Let's remove the coupling with the surface temperature \
-This is like saying that all of a sudden the atmosphere becomes transparent to the radiation coming from the earth
+Let's analyze this by simplifying a bit our discretized atmospheric equation. Let's remove the coupling with the surface temperature. This is like saying that all of a sudden the atmosphere becomes transparent to the radiation coming from the earth (unlikely)
 ```math
 C_a \frac{T_a^{(n+1)} - T_a^{(n)}}{\Delta t} = -2\varepsilon \sigma T_a^4
 ```
@@ -602,7 +600,7 @@ We know that temperature should remain positive
 ```
 This translates in the condition on ``\Delta t``
 ```math
-\Delta t < \frac{1}{D} = \frac{C_a}{2\varepsilon\left( T_a^{(n)}\right)^3}
+\Delta t < \frac{1}{D} = \frac{C_a}{2\varepsilon \sigma \left( T_a^{(n)}\right)^3}
 ```
 For ``T_a`` equal to 288 K, ``\Delta t`` should be lower than $(@sprintf "%.2f" Cₐ / (2 * 0.5 * σ * 288^3)) days \
 Going back to the previous plot, which combination of parameters will make my model the most unstable?
