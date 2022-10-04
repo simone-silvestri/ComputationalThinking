@@ -64,7 +64,7 @@ end
 
 # ╔═╡ 8ef88534-dac4-4a62-b623-dcaf63482a96
 md"""
-# Section 2.3: a latitudinal-dependent climate
+# Section 2.3: a latitude-dependent climate
 """
 
 # ╔═╡ cfb8f979-37ca-40ab-8d3c-0053911717e7
@@ -97,27 +97,9 @@ In practice we will not look at all these dependencies but we will average out e
 
 """
 
-# ╔═╡ a16912cc-10a9-44b7-884e-e415ffd20a5d
+# ╔═╡ eb95e773-b12a-40a4-a4f1-9dced86fc8a2
 md"""
-##### Seasonal dependency
-The solar altitude angle measured at noon will differ from the corresponding equinocial angle by an angle of up to ± 23° 17'. This angle is called the solar declination. It is defined as the angular distance from the zenith of the observer at the equator and the sun at solar noon. It is positive when it is north and negative when it is south. The declination reaches its maximum value, +23° 17', on 21 June (the summer solstice in the northern hemisphere, the winter solstice in the southern hemisphere). The minimum value, −23° 27', is reached on 20 December. The declination, in degrees, for any given day may be calculated in first approximation with the equation:
-
-```math
-\delta = 23.45^\circ \sin{\left(\frac{360}{365.25} \cdot (\text{day} - 81)\right)}
-```
-
-where ``\text{day}`` starts from 1 at the 1st of January and ends at 365 at December 31st, while the 81 is the spring equinox (21st of March), where earth's axis is perpendicular to the orbit
-
-
-$(Resource("https://ars.els-cdn.com/content/image/3-s2.0-B9780080247441500061-f01-03-9780080247441.gif", :height => 300))
-**Figure**: Declination angle (``\delta``) versus days after the equinox. 
-
-"""
-
-
-# ╔═╡ 52d35593-b841-4c76-8657-0f0f5c9b2f85
-md"""
-##### Latitudinal dependency
+##### Latitudinal dependency (angle ``\phi``)
 
 Different parts of Earth’s surface receive different amounts of sunlight (Figure below). \
 The Sun’s rays strike Earth’s surface most directly at the equator. This focuses the rays on a small area. \
@@ -125,22 +107,36 @@ Near the poles, the Sun’s rays strike the surface at a slant. This spreads the
 The more focused the rays are, the more energy an area receives, and the warmer it is.
 
 $(Resource("https://static.manitobacooperator.ca/wp-content/uploads/2020/02/18151642/insolation_CMYK.jpg#_ga=2.245013061.1375356746.1664813564-1302273094.1664813564", :height => 300))
-"""
 
-# ╔═╡ eb95e773-b12a-40a4-a4f1-9dced86fc8a2
-md"""
-##### Hourly dependency
+##### Hourly dependency (angle ``h``)
 
 As the earth rotates along its axis, the same happens in the east-west direction. At noon, the rays will be parallel to the earth, facing the smallest surface area. In the evening/morning, rays are slanted, facing a larger surface area. We can express this dependency as an angle (``h``) that takes the value of 0 at noon, positive values in the afternoon, and negative values in the morning. Since the Earth rotates 15° per hour, each hour away from noon corresponds to an angular motion of the sun in the sky of 15°
+
+##### Seasonal dependency (angle ``\delta``)
+
+The declination of the sun is the angle between the equator and a line drawn from the center of the Earth to the center of the sun. It is positive when it is north and negative when it is south. The declination reaches its maximum value, +23° 17', on 21 June (the summer solstice in the northern hemisphere, the winter solstice in the southern hemisphere). The minimum value, −23° 27', is reached on 20 December. 
+[Animation showing the declination angle.](https://www.pveducation.org/sites/default/files/PVCDROM/Properties-of-Sunlight/Animations/earth-rotation/earth-rotation_HTML5.html)
+The declination, in degrees, for any given day may be calculated (approximately) with the equation:
+
+```math
+\delta = 23.45^\circ \sin{\left(\frac{360}{365.25} \cdot (\text{day} - 80)\right)}
+```
+
+where ``\text{day}`` starts from 1 on the 1st of January and ends at 365 on December 31st, while the 80th day is the spring equinox (22nd of March), where the earth's axis is perpendicular to the orbit
+
+
+
+$(Resource("https://ars.els-cdn.com/content/image/3-s2.0-B9780080247441500061-f01-03-9780080247441.gif", :height => 300))
+**Figure**: Declination angle (``\delta``) versus days after the equinox. 
 """
 
 # ╔═╡ 75cacd05-c9f8-44ba-a0ce-8cde93fc8b85
 md"""
-## Bringing it all together
+### Bringing it all together
 
 We can sum up all these variations in the _zenith angle_, the incident angle between the incoming solar rays and the earth's surface. We model the instantaneous solar flux with
 ```math
-Q \approx S_0 cos(\theta_z) 
+Q \approx S_0 \left( \underbrace{\sin{\phi} \sin{\delta} + \cos{h} \cos{\delta} \cos{\phi}}_{\cos{\theta_z}} \right)
 ```
 
 where ``\theta_z`` is the angle in the figure below
@@ -148,10 +144,6 @@ where ``\theta_z`` is the angle in the figure below
 $(Resource("https://ars.els-cdn.com/content/image/3-s2.0-B9780128121498000028-f02-02-9780128121498.jpg", :height => 300))
 **Figure:** Zenith angle, (M. Rosa-Clot & G. Tina, Submerged and Floating Photovoltaic Systems, 2018, chapter 2)
 
-The zenith angle can be expressed in terms of hour, declination and latitude angles as
-```math
-\cos{\theta_z} = \sin{\phi} \sin{\delta} + \cos{h} \cos{\delta} \cos{\phi}
-```
 The cosine of the zenith angle is the useful percentage of ``S_0`` which strikes the earth's surface.
 What does the first term on the right-hand side express? And the second?
 Of course, negative insolation does not exist... negative values of ``\cos{\theta_z}`` indicate nighttime, for which ``Q=0``. Sunrise and sunset occur when ``cos(\theta_z) = 0``, then the sunset (and sunrise) hour angle (``h_{ss}``) depends on declination and latitude as follows
@@ -187,11 +179,11 @@ which is easily integrated to
 # ╔═╡ 18ddf155-f9bc-4e5b-97dc-762fa83c9931
 function daily_insolation(lat; day = 80, S₀ = 1365.2)
 
-	march_first = 81.0
+	march_first = 80.0
 	ϕ = deg2rad(lat)
 	δ = deg2rad(23.45) * sind(360*(day - march_first) / 365.25)
 
-	h₀ = abs(δ) + abs(ϕ) < π/2 ? # there is a sunset / sunrise
+	h₀ = abs(δ) + abs(ϕ) < π/2 ? # there is a sunset/sunrise
 		 acos(-tan(ϕ) * tan(δ)) :
 		 ϕ * δ > 0 ? π : 0.0 # all day or all night
 		
@@ -216,7 +208,7 @@ begin
 	function day_to_date(day)
 		months = (:Jan, :Feb, :Mar, :Apr, :May, :Jun, :Jul, :Aug, :Sep, :Oct, :Nov, :Dec)
 		days_in_months   = (30, 28, 31, 30, 31, 30, 31, 31, 30, 31, 31, 31)
-		days_till_months = [1, [sum(days_in_months[1:i])+1 for i in 1:11]...]
+		days_till_months = [1, [sum(days_in_months[1:i]) for i in 1:11]...]
 
 		month = searchsortedlast(days_till_months, day)
 		day_in_month = month > 1 ? day - sum(days_in_months[1:month-1]) : day
@@ -272,7 +264,7 @@ begin
 	$(current_figure())
 	**Figure**: Annual mean insolation
 	
-	we can see that, indeed, the average insolation is much lower at the poles compared the equator! This is reassuring since the poles are colder than the equator!
+	We can see that the average insolation is much lower (~2.5X) at the poles compared to the equator! This is 	reassuring since the poles are colder than the equator!
 	
 	"""
 end
@@ -431,14 +423,15 @@ Some comments:
 
 # ╔═╡ 15dee5d8-e995-4e5a-aceb-48bcce42e76d
 md"""
-### Coding a time stepping function
+### Coding an explicit time stepping function
 
-Now we can write a function which evolves our model of a time step ``\Delta t``. \
-The easiest way to do this is to time step **_explicitly_**
+Now we can write a function which evolves our model of a time step ``\Delta t``.
 """
 
 # ╔═╡ 2287bff1-6fb0-4431-8e15-aff3d7b6e005
 md"""
+### Coding an implicit time stepping function
+
 If we want to time step implicitly we have to solve the ``AT=b`` linear system \
 Fortunately in Julia, solving a linear system is as simple as writing
 ```
@@ -473,7 +466,7 @@ With the function to construct the matrix at each time step, we can code the tim
 
 # ╔═╡ 049e2164-24ac-467c-9d96-77510ac6ff57
 md"""
-Let's verify that both our model reaches equilibrium if time stepped implicitly and explicitly.
+Let's verify that both our model reaches equilibrium if time stepped either implicitly or explicitly.
 
 Some constants to be defined:
 - the stefan Boltzmann constant (σ) in [Wm⁻²K⁻⁴]
@@ -517,8 +510,8 @@ begin
 	# It is always useful to define functions to extract struct properties so we 
 	# have the possibility to extend them in the future
 	# emissivity and albedo
-	albedo(model)     = model.α
-	emissivity(model) = model.ε
+	@inline albedo(model)     = model.α
+	@inline emissivity(model) = model.ε
 
 	# Utility functions to @show the model
 	timestepping(model::ExplicitZeroDModel) = "Explicit"
@@ -551,7 +544,7 @@ end
 
 # ╔═╡ de5d415f-8216-473d-8e0b-a73139540e1e
 # Let's test the constructor and the show method
-test_model = ZeroDModel(ϕ = 45)
+ZeroDModel(ϕ = 45)
 
 # ╔═╡ b85fdf41-ef8f-4314-bc3c-383947b9f02c
 @bind values PlutoUI.combine() do Child
@@ -664,6 +657,7 @@ begin
 
 	obs_temp_path = @datadep_str "computional_thinking_data/observed_T.jld2"
 	det_temp_path = @datadep_str "computional_thinking_data/detailed_radiation_T.jld2"
+	obs_rad_path  = @datadep_str "computional_thinking_data/observed_radiation.jld2"
 	
 	# Load the observed zonally averaged temperature profile
 	T_obs = jldopen(obs_temp_path)["T"]
@@ -712,11 +706,6 @@ begin
 	Note! Physical values of emissivity range between 0 and 1!
 	"""
 end
-
-# ╔═╡ 6df6c4df-9b1b-46d2-aaa5-b3c789e59b99
-md"""
-## Outgoing Radiation
-"""
 
 # ╔═╡ 901548f8-a6c9-48f8-9c8f-887500081316
 md"""
@@ -868,7 +857,6 @@ end
 # ╔═╡ a93c36c9-b687-44b9-b0b6-5fe636ab061c
 # Remember that our temperature can be a scalar or a vector, 
 # depending on the latitude given to construct the model
-
 function time_step!(model::ExplicitZeroDModel, Δt)
 	Tₛ = model.Tₛ
 	Tₐ = model.Tₐ
@@ -1203,14 +1191,14 @@ begin
 								ylabel = "Absorbed Shortwave Radiation (ASR) [W/m²]")
 	
 	md""" 
-	## Incoming and Outgoing Radiation
+	## Absorbed Shortwave Radiation
 
-	Till now we also included a constant albedo of 0.2985 because it gave us the best fit with observations in an averaged global earth. 
+	Till now we also included a constant albedo of 0.2985 because it gave us the best fit with observations in an averaged global earth. But is an albedo of 0.2985 everywhere a good approximation when taking into account latitudinal dependency?
 
-	But is an abledo of 0.2985 everywhere a good approximation when taking into account latitudinal dependency?
-
-	Let's look compare the observed Absorbed Shortwave Radiation (ASR) to the profile we use to force our model
-
+	Let's look at the actual energy that our climate system absorbs, in the form of Absorbed Shortwave Radiation (ASR). We can calculate it with
+	```
+	ASR(model) = @. (1 - albedo(model)) * model.Q
+	```
 	$(current_figure())
 	**Figure**: comparison between ASR used to force the ZeroDModel and the observed ASR (from [NCEP reanalysis](https://psl.noaa.gov/data/gridded/data.ncep.reanalysis.html))
 
@@ -1233,12 +1221,9 @@ begin
 								["ASR constant α", "ASR variable α", "observed ASR"],
 								[:red, :purple, :red], 
 								[:solid, :solid, :dashdot],
-								ylabel = "Absorbed Shortwave Radiation (ASR) [W/m²]")
-	
-	OLR(model) = σ .* ((1 .- emissivity(model)) .* model.Tₛ.^4 + emissivity(model) .* model.Tₐ.^4)
-	
+								ylabel = "Absorbed Shortwave Radiation (ASR) [W/m²]")	
 	md""" 
-	## Absorbed Shortwave Radiation
+	## Variable albedo
 	$(current_figure())
 	"""
 end
@@ -1266,6 +1251,36 @@ begin
 	$(current_figure())
 
 	What is the problem here?
+	"""
+end
+
+# ╔═╡ d13c319d-345a-40b8-b90d-b0b226225434
+begin
+	OLR(model) = σ .* ((1 .- emissivity(model)) .* model.Tₛ.^4 + emissivity(model) .* model.Tₐ.^4)
+
+	evolve_model!(model_var1, Δt = 50, stop_year = 50)
+
+	plot_latitudinal_variables!(ϕ, [ASR_obs, ASR(model_var1), OLR_obs, OLR(model_var1)],
+								["Observed ASR",
+								 "Modeled ASR",
+								 "Observed OLR",
+								 "Modeled OLR"],
+								[:red, :red, :blue, :blue],
+								[:dashdot, :solid, :dashdot, :solid],
+								ylabel = "ASR and OLR [W/m²]")
+	
+	md"""
+	### Outgoing Longwave Radiation (OLR)
+	
+	We can look at the outgoing longwave radiation, which is the energy that the climate system loses to space in the form of infrared radiation. We can calculate it from our model as
+	
+	```
+	OLR(model) = @. (1 - emissivity(model)) * σ * model.Tₛ^4 + emissivity(model) * σ * model.Tₐ^4
+	```
+
+	$(current_figure())
+
+	The OLR and ASR from our model match! (Is this expected?)
 	"""
 end
 
@@ -1329,13 +1344,19 @@ end
 
 # ╔═╡ 77a73a9d-9d78-4cf5-ae19-f1107fa5b4c2
 begin
-HF = model_1D.κₛ .* explicit_diffusion(model_1D.Tₛ, deg2rad(2), model_1D.ϕᶠ, model_1D.ϕᶜ) 
+	HF = model_1D.κₛ .* explicit_diffusion(model_1D.Tₛ, deg2rad(2), model_1D.ϕᶠ, model_1D.ϕᶜ) 
+	
+	plot_latitudinal_variables!(ϕ, [HF], [""], [:blue], [:dash])
 
-plot_latitudinal_variables!(ϕ, [HF], ["HeatFlux"], [:blue], [:dash])
-current_figure()
+	md"""
+	$(current_figure())
 
-# Let's calculate the integral
-sum(HF .* cos.(model_1D.ϕᶜ) .* (model_1D.ϕᶠ[2:end] .- model_1D.ϕᶠ[1:end-1]))
+	Let's calculate the integral
+	$(sum(HF .* cos.(model_1D.ϕᶜ) .* (model_1D.ϕᶠ[2:end] .- model_1D.ϕᶠ[1:end-1])))
+
+	"""
+	
+	
 end
 
 # ╔═╡ b0ca64b8-0211-4d1c-b007-7583bf8ac908
@@ -2858,8 +2879,6 @@ version = "3.5.0+0"
 # ╟─d8e3d937-bcda-4c84-b543-e1324f696bbc
 # ╟─8ef88534-dac4-4a62-b623-dcaf63482a96
 # ╟─cfb8f979-37ca-40ab-8d3c-0053911717e7
-# ╟─a16912cc-10a9-44b7-884e-e415ffd20a5d
-# ╟─52d35593-b841-4c76-8657-0f0f5c9b2f85
 # ╟─eb95e773-b12a-40a4-a4f1-9dced86fc8a2
 # ╟─75cacd05-c9f8-44ba-a0ce-8cde93fc8b85
 # ╠═18ddf155-f9bc-4e5b-97dc-762fa83c9931
@@ -2881,7 +2900,7 @@ version = "3.5.0+0"
 # ╟─049e2164-24ac-467c-9d96-77510ac6ff57
 # ╠═f07006ac-c773-4829-9a38-6f9991403386
 # ╟─b85fdf41-ef8f-4314-bc3c-383947b9f02c
-# ╠═00776863-2260-48a8-83c1-3f2696f11d96
+# ╟─00776863-2260-48a8-83c1-3f2696f11d96
 # ╟─16ca594c-c9db-4528-aa65-bab12cb6e22a
 # ╟─6b770afa-bf99-49eb-9489-367d9de58780
 # ╠═fd14e483-94a4-4a8b-8ca5-0eb24d487e4a
@@ -2893,9 +2912,9 @@ version = "3.5.0+0"
 # ╟─fa7d8bbd-c023-4d94-a78a-d3b3223b023f
 # ╟─69acab94-5daf-4a24-9075-98126fadc166
 # ╟─1a4d9e1b-a8b3-40ec-b4d9-84caa7d43a1d
-# ╟─816c0de5-1ad1-4084-bf1e-331760287e25
+# ╠═816c0de5-1ad1-4084-bf1e-331760287e25
 # ╟─4640a179-3373-4901-ac31-31022e8c7eb2
-# ╟─6df6c4df-9b1b-46d2-aaa5-b3c789e59b99
+# ╟─d13c319d-345a-40b8-b90d-b0b226225434
 # ╟─901548f8-a6c9-48f8-9c8f-887500081316
 # ╟─8f963bc5-1900-426d-ba1f-078ed45b48d3
 # ╟─567fa8d3-35b4-40d7-8404-ae78d2874380
@@ -2910,7 +2929,7 @@ version = "3.5.0+0"
 # ╟─a046b625-b046-4ca0-adde-be5249a420f4
 # ╟─514ee86b-0aeb-42cd-b4cd-a795ed23b3de
 # ╟─6534f98d-1270-4e7c-8ce8-66a6b1ee48f7
-# ╟─77a73a9d-9d78-4cf5-ae19-f1107fa5b4c2
+# ╠═77a73a9d-9d78-4cf5-ae19-f1107fa5b4c2
 # ╠═b0ca64b8-0211-4d1c-b007-7583bf8ac908
 # ╟─51f3fd00-508b-4b42-bd95-ae19cb19b4db
 # ╟─65dedef2-03e5-4e0f-8022-53168952e7a8
