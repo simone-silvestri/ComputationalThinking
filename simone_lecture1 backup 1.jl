@@ -14,62 +14,73 @@ macro bind(def, element)
     end
 end
 
-# ╔═╡ d8e3d937-bcda-4c84-b543-e1324f696bbc
-begin 
-	
+# ╔═╡ 42085492-ac8c-11eb-0620-adcb307077f1
+html"""
+<div style="
+position: absolute;
+width: calc(100% - 30px);
+border: 50vw solid #282936;
+border-top: 200px solid #282936;
+border-bottom: none;
+box-sizing: content-box;
+left: calc(-50vw + 15px);
+top: -200px;
+height: 200px;
+pointer-events: none;
+"></div>
+
+<div style="
+height: 200px;
+width: 100%;
+background: #282936;
+color: #fff;
+padding-top: 68px;
+">
+<span style="
+font-family: Vollkorn, serif;
+font-weight: 700;
+font-feature-settings: 'lnum', 'pnum';
+"> <p style="
+font-size: 1.5rem;
+opacity: .8;
+"><em>Section 2.1</em></p>
+<p style="text-align: center; font-size: 2rem;">
+<em> Climate models: greenhouse effect </em>
+</p>
+
+<style>
+body {
+overflow-x: hidden;
+}
+</style>"""
+
+# ╔═╡ 14195fc4-40e1-4576-973a-69d649fddc02
+TableOfContents(title="📚 Table of Contents", indent=true, depth=4, aside=true)
+
+# ╔═╡ b5e260ed-3cda-405f-8b0a-87a725d6c098
+# ╠═╡ show_logs = false
+begin
 	import Pkg
 	using Printf, CairoMakie, PlutoUI, JLD2
 	using LinearAlgebra, SparseArrays, Optim
 	using DataDeps
-	
-	html"""
-	<div style="
-	position: absolute;
-	width: calc(100% - 30px);
-	border: 50vw solid #282936;
-	border-top: 200px solid #282936;
-	border-bottom: none;
-	box-sizing: content-box;
-	left: calc(-50vw + 15px);
-	top: -200px;
-	height: 200px;
-	pointer-events: none;
-	"></div>
-	
-	<div style="
-	height: 200px;
-	width: 100%;
-	background: #282936;
-	color: #fff;
-	padding-top: 68px;
-	">
-	<span style="
-	font-family: Vollkorn, serif;
-	font-weight: 700;
-	font-feature-settings: 'lnum', 'pnum';
-	"> <p style="
-	font-size: 1.5rem;
-	opacity: .8;
-	"><em>Section 2.3 and 2.4</em></p>
-	<p style="text-align: center; font-size: 2rem;">
-	<em> Climate models: solving the climate system in Julia </em>
-	</p>
-	
-	<style>
-	body {
-	overflow-x: hidden;
-	}
-	</style>"""
 end
 
-# ╔═╡ 8ef88534-dac4-4a62-b623-dcaf63482a96
-md"""
-# Section 2.3: a latitudinal-dependent climate
-"""
+# ╔═╡ 70efec2e-afae-4e24-ade6-3b9039591b85
+html"""
+	<style>
+		main {
+			margin: 0 auto;
+			max-width: 2000px;
+	    	padding-left: max(300px, 10%);
+	    	padding-right: max(300px, 10%);
+		}
+	</style>
+	"""
 
 # ╔═╡ cfb8f979-37ca-40ab-8d3c-0053911717e7
 md"""
-## Variable insolation
+# Latitudinal Variability
 
 Let us introduce some variability in our climate system. We can express the global, annual averaged radiative flux that reaches earth with
 ```math
@@ -83,18 +94,7 @@ Three main parameters affect the intensity of the incoming solar radiation:
 - the season of the year
 - the latitude
 
-You have seen this: 
-
-$(Resource("https://raw.githubusercontent.com/simone-silvestri/ComputationalThinking/main/sun-earth-system-0d.png", :height => 80))
-**Figure**: 0D model in which the earth is modeled as a "point", the incoming radiation ``S_0 / 4 (1 - \alpha)``
-
-This is the full picture:
-
-$(Resource("https://raw.githubusercontent.com/simone-silvestri/ComputationalThinking/main/sun-earth-system.png", :height => 100))
-**Figure**: 3D model with variations in hours/day/season
-
-In practice we will not look at all these dependencies but we will average out everything that happens in a day and in a year, remaining a 1D model which solves for time and latitude direction
-
+---
 """
 
 # ╔═╡ a16912cc-10a9-44b7-884e-e415ffd20a5d
@@ -110,8 +110,9 @@ where ``\text{day}`` starts from 1 at the 1st of January and ends at 365 at Dece
 
 
 $(Resource("https://ars.els-cdn.com/content/image/3-s2.0-B9780080247441500061-f01-03-9780080247441.gif", :height => 300))
-**Figure**: Declination angle (``\delta``) versus days after the equinox. 
+**Figure 3** Declination angle (``\delta``) versus days after the equinox. 
 
+---
 """
 
 
@@ -125,6 +126,8 @@ Near the poles, the Sun’s rays strike the surface at a slant. This spreads the
 The more focused the rays are, the more energy an area receives, and the warmer it is.
 
 $(Resource("https://static.manitobacooperator.ca/wp-content/uploads/2020/02/18151642/insolation_CMYK.jpg#_ga=2.245013061.1375356746.1664813564-1302273094.1664813564", :height => 300))
+
+---
 """
 
 # ╔═╡ eb95e773-b12a-40a4-a4f1-9dced86fc8a2
@@ -132,6 +135,8 @@ md"""
 ##### Hourly dependency
 
 As the earth rotates along its axis, the same happens in the east-west direction. At noon, the rays will be parallel to the earth, facing the smallest surface area. In the evening/morning, rays are slanted, facing a larger surface area. We can express this dependency as an angle (``h``) that takes the value of 0 at noon, positive values in the afternoon, and negative values in the morning. Since the Earth rotates 15° per hour, each hour away from noon corresponds to an angular motion of the sun in the sky of 15°
+
+---
 """
 
 # ╔═╡ 75cacd05-c9f8-44ba-a0ce-8cde93fc8b85
@@ -280,7 +285,7 @@ end
 
 # ╔═╡ 034fc483-b188-4b2a-891a-61b76c74072d
 md"""
-## Solving the climate system: equilibrium solution
+## Equilibrium solution of the model
 
 Let us remember the system of ODE we defined that governs the surface and atmospheric temperature. \
 The forcing will now be latitude-dependent, giving a latitude-dependent temperature
@@ -313,7 +318,7 @@ which yields
 
 # ╔═╡ 5d31e2a8-e357-4479-bc48-de1a1b8bc4d4
 md"""
-## Solving the climate system: numerical solution
+## Numerical solution of the model
 
 The equilibrium solution is good, but it is good to keep the time derivative to see the evolution in case the forcing changes. To do this we can solve our system of ODEs numerically.
 
@@ -419,7 +424,7 @@ C_a T_a^{(n)} \\ C_s T_s^{(n)} + \Delta t F
 
 # ╔═╡ 724901e9-a19a-4d5f-aa6a-79ec0f230f24
 md"""
-# Let's code our model in Julia
+## Let's code our model in Julia
 
 We can start creating a ```struct``` that contains the information we need, i.e., the parameters of the system, the state of the system and the solution method
 
@@ -464,11 +469,6 @@ C_a {T_a}_1^{n} \\ C_a {T_a}_2^{n} \\ C_a {T_a}_3^{n} \\ C_s {T_s}_1^{n} + \Delt
 
 ```
 where the diagonal terms are the sink terms, while the off-diagonal are the interexchange terms between surface and atmosphere. (Following the A matrix outlined above)
-"""
-
-# ╔═╡ e24e54a7-804e-40e8-818e-8766e5e3732b
-md"""
-With the function to construct the matrix at each time step, we can code the time stepping method by introducing the rhs and solving the linear system
 """
 
 # ╔═╡ 049e2164-24ac-467c-9d96-77510ac6ff57
@@ -718,11 +718,6 @@ md"""
 ## Outgoing Radiation
 """
 
-# ╔═╡ 901548f8-a6c9-48f8-9c8f-887500081316
-md"""
-# Section 2.4: Heat transport
-"""
-
 # ╔═╡ 8f963bc5-1900-426d-ba1f-078ed45b48d3
 md"""
 # Global atmospheric circulation
@@ -884,56 +879,57 @@ function time_step!(model::ExplicitZeroDModel, Δt)
 end
 
 # ╔═╡ c0ff6c61-c4be-462b-a91c-0ee1395ef584
-function construct_matrix(model, Δt)
-	Tₛ = model.Tₛ
-	Tₐ = model.Tₐ
-
-	ε = emissivity(model)
-	Q = model.Q
-
-	Cₐ = model.Cₐ
-	Cₛ = model.Cₛ
-
-	n = length(Tₛ)
-	m = 2 * n
-	A = zeros(m, m)
+begin
+	function construct_matrix(model, Δt)
+		Tₛ = model.Tₛ
+		Tₐ = model.Tₐ
 	
-	eₐ = @. Δt * σ * Tₐ^3 * ε
-	eₛ = @. Δt * σ * Tₛ^3
-
-	# We insert the diagonal
-	D = [(@. Cₐ + 2 * eₐ)..., (@. Cₛ + eₛ)...] 
-
-	# the off-diagonal corresponding to the interexchange terms
-	da = @. -eₐ
-	ds = @. -ε*eₛ
-
-	# spdiagm(idx => vector) constructs a sparse matrix 
-	#with vector `vec` at the `idx`th diagonal 
-	A = spdiagm(0 => D,
-				n => [ds...],
-			   -n => [da...])
-	return A
-end
-
-# ╔═╡ 97e1ce89-f796-4bd1-8e82-94fc838829a6
-function time_step!(model::ImplicitZeroDModel, Δt)
-	α = albedo(model)
-	A = construct_matrix(model, Δt)
+		ε = emissivity(model)
+		Q = model.Q
 	
-	rhsₐ = @. model.Cₐ * model.Tₐ
-	rhsₛ = @. model.Cₛ * model.Tₛ + Δt * (1 - α) * model.Q
+		Cₐ = model.Cₐ
+		Cₛ = model.Cₛ
+	
+		n = length(Tₛ)
+		m = 2 * n
+		A = zeros(m, m)
+		
+		eₐ = @. Δt * σ * Tₐ^3 * ε
+		eₛ = @. Δt * σ * Tₛ^3
+	
+		# We insert the diagonal
+		D = [(@. Cₐ + 2 * eₐ)..., (@. Cₛ + eₛ)...] 
+	
+		# the off-diagonal corresponding to the interexchange terms
+		da = @. -eₐ
+		ds = @. -ε*eₛ
 
-	rhs = [rhsₐ..., rhsₛ...]
+		# spdiagm(idx => vector) constructs a sparse matrix 
+		#with vector `vec` at the `idx`th diagonal 
+	    A = spdiagm(0 => D,
+	                n => [ds...],
+	               -n => [da...])
+		return A
+	end
 
+	function time_step!(model::ImplicitZeroDModel, Δt)
+		α = albedo(model)
+		A = construct_matrix(model, Δt)
+		
+		rhsₐ = @. model.Cₐ * model.Tₐ
+		rhsₛ = @. model.Cₛ * model.Tₛ + Δt * (1 - α) * model.Q
+	
+		rhs = [rhsₐ..., rhsₛ...]
 
-	T = A \ rhs
+	
+		T = A \ rhs
 
-	nₐ = length(model.Tₐ)
-	nₛ = length(model.Tₛ)
-
-	@. model.Tₐ = T[1:nₐ]
-	@. model.Tₛ = T[nₐ+1:nₐ+nₛ]
+		nₐ = length(model.Tₐ)
+		nₛ = length(model.Tₛ)
+	
+		@. model.Tₐ = T[1:nₐ]
+		@. model.Tₛ = T[nₐ+1:nₐ+nₛ]
+	end
 end
 
 # ╔═╡ 1cef338d-5c4a-4ea5-98d7-9ac4f11922f3
@@ -1463,22 +1459,6 @@ begin
 	lines(S₀₁, ice_line_model)
 	current_figure()
 end
-
-# ╔═╡ b768707a-5077-4662-bcd1-6d38b3e4f929
-html"""
-        <style>
-                main {
-                        margin: 0 auto;
-                        max-width: 2000px;
-                padding-left: max(320px, 10%);
-                padding-right: max(320px, 10%);
-                }
-        </style>
-        """
-
-
-# ╔═╡ 419c8c31-6408-489a-a50e-af712cf20b7e
-TableOfContents(title="📚 Table of Contents", indent=true, depth=4, aside=true)
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -2855,8 +2835,8 @@ version = "3.5.0+0"
 """
 
 # ╔═╡ Cell order:
-# ╟─d8e3d937-bcda-4c84-b543-e1324f696bbc
-# ╟─8ef88534-dac4-4a62-b623-dcaf63482a96
+# ╟─70efec2e-afae-4e24-ade6-3b9039591b85
+# ╟─b5e260ed-3cda-405f-8b0a-87a725d6c098
 # ╟─cfb8f979-37ca-40ab-8d3c-0053911717e7
 # ╟─a16912cc-10a9-44b7-884e-e415ffd20a5d
 # ╟─52d35593-b841-4c76-8657-0f0f5c9b2f85
@@ -2876,8 +2856,6 @@ version = "3.5.0+0"
 # ╠═a93c36c9-b687-44b9-b0b6-5fe636ab061c
 # ╟─2287bff1-6fb0-4431-8e15-aff3d7b6e005
 # ╠═c0ff6c61-c4be-462b-a91c-0ee1395ef584
-# ╟─e24e54a7-804e-40e8-818e-8766e5e3732b
-# ╠═97e1ce89-f796-4bd1-8e82-94fc838829a6
 # ╟─049e2164-24ac-467c-9d96-77510ac6ff57
 # ╠═f07006ac-c773-4829-9a38-6f9991403386
 # ╟─b85fdf41-ef8f-4314-bc3c-383947b9f02c
@@ -2896,7 +2874,6 @@ version = "3.5.0+0"
 # ╟─816c0de5-1ad1-4084-bf1e-331760287e25
 # ╟─4640a179-3373-4901-ac31-31022e8c7eb2
 # ╟─6df6c4df-9b1b-46d2-aaa5-b3c789e59b99
-# ╟─901548f8-a6c9-48f8-9c8f-887500081316
 # ╟─8f963bc5-1900-426d-ba1f-078ed45b48d3
 # ╟─567fa8d3-35b4-40d7-8404-ae78d2874380
 # ╟─0d8fffdc-a9f5-4d82-84ec-0f27acc04c21
@@ -2911,12 +2888,10 @@ version = "3.5.0+0"
 # ╟─514ee86b-0aeb-42cd-b4cd-a795ed23b3de
 # ╟─6534f98d-1270-4e7c-8ce8-66a6b1ee48f7
 # ╟─77a73a9d-9d78-4cf5-ae19-f1107fa5b4c2
-# ╠═b0ca64b8-0211-4d1c-b007-7583bf8ac908
+# ╟─b0ca64b8-0211-4d1c-b007-7583bf8ac908
 # ╟─51f3fd00-508b-4b42-bd95-ae19cb19b4db
 # ╟─65dedef2-03e5-4e0f-8022-53168952e7a8
 # ╟─ebcf224f-c006-4098-abf0-5c3644e2ee97
-# ╟─1c33dc21-04af-4139-9061-696db73c3249
-# ╠═b768707a-5077-4662-bcd1-6d38b3e4f929
-# ╠═419c8c31-6408-489a-a50e-af712cf20b7e
+# ╠═1c33dc21-04af-4139-9061-696db73c3249
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

@@ -50,9 +50,9 @@ begin
 	"> <p style="
 	font-size: 1.5rem;
 	opacity: .8;
-	"><em>Section 2.3 and 2.4</em></p>
+	"><em>Section 2.3</em></p>
 	<p style="text-align: center; font-size: 2rem;">
-	<em> Climate models: solving the climate system in Julia </em>
+	<em> Climate models: introducing heat transport </em>
 	</p>
 	
 	<style>
@@ -61,41 +61,6 @@ begin
 	}
 	</style>"""
 end
-
-# ╔═╡ 8ef88534-dac4-4a62-b623-dcaf63482a96
-md"""
-# Section 2.3: a latitudinal-dependent climate
-"""
-
-# ╔═╡ cfb8f979-37ca-40ab-8d3c-0053911717e7
-md"""
-## Variable insolation
-
-Let us introduce some variability in our climate system. We can express the global, annual averaged radiative flux that reaches earth with
-```math
-\pi R^2 S_0 , \ \ \ \ \text{with} \ \ \ \ S_0 \approx 1365 \ W m^{-2}
-```
-of which, only ``(1 - \alpha)`` is absorbed. This flux is not distributed equally along the surface of the planet. The insolation amount and intensity vary during a day, season, and year. \
-
-Three main parameters affect the intensity of the incoming solar radiation:
-
-- the hour in the day
-- the season of the year
-- the latitude
-
-You have seen this: 
-
-$(Resource("https://raw.githubusercontent.com/simone-silvestri/ComputationalThinking/main/sun-earth-system-0d.png", :height => 80))
-**Figure**: 0D model in which the earth is modeled as a "point", the incoming radiation ``S_0 / 4 (1 - \alpha)``
-
-This is the full picture:
-
-$(Resource("https://raw.githubusercontent.com/simone-silvestri/ComputationalThinking/main/sun-earth-system.png", :height => 100))
-**Figure**: 3D model with variations in hours/day/season
-
-In practice we will not look at all these dependencies but we will average out everything that happens in a day and in a year, remaining a 1D model which solves for time and latitude direction
-
-"""
 
 # ╔═╡ a16912cc-10a9-44b7-884e-e415ffd20a5d
 md"""
@@ -114,320 +79,6 @@ $(Resource("https://ars.els-cdn.com/content/image/3-s2.0-B9780080247441500061-f0
 
 """
 
-
-# ╔═╡ 52d35593-b841-4c76-8657-0f0f5c9b2f85
-md"""
-##### Latitudinal dependency
-
-Different parts of Earth’s surface receive different amounts of sunlight (Figure below). \
-The Sun’s rays strike Earth’s surface most directly at the equator. This focuses the rays on a small area. \
-Near the poles, the Sun’s rays strike the surface at a slant. This spreads the rays over a wide area. \
-The more focused the rays are, the more energy an area receives, and the warmer it is.
-
-$(Resource("https://static.manitobacooperator.ca/wp-content/uploads/2020/02/18151642/insolation_CMYK.jpg#_ga=2.245013061.1375356746.1664813564-1302273094.1664813564", :height => 300))
-"""
-
-# ╔═╡ eb95e773-b12a-40a4-a4f1-9dced86fc8a2
-md"""
-##### Hourly dependency
-
-As the earth rotates along its axis, the same happens in the east-west direction. At noon, the rays will be parallel to the earth, facing the smallest surface area. In the evening/morning, rays are slanted, facing a larger surface area. We can express this dependency as an angle (``h``) that takes the value of 0 at noon, positive values in the afternoon, and negative values in the morning. Since the Earth rotates 15° per hour, each hour away from noon corresponds to an angular motion of the sun in the sky of 15°
-"""
-
-# ╔═╡ 75cacd05-c9f8-44ba-a0ce-8cde93fc8b85
-md"""
-## Bringing it all together
-
-We can sum up all these variations in the _zenith angle_, the incident angle between the incoming solar rays and the earth's surface. We model the instantaneous solar flux with
-```math
-Q \approx S_0 cos(\theta_z) 
-```
-
-where ``\theta_z`` is the angle in the figure below
-
-$(Resource("https://ars.els-cdn.com/content/image/3-s2.0-B9780128121498000028-f02-02-9780128121498.jpg", :height => 300))
-**Figure:** Zenith angle, (M. Rosa-Clot & G. Tina, Submerged and Floating Photovoltaic Systems, 2018, chapter 2)
-
-The zenith angle can be expressed in terms of hour, declination and latitude angles as
-```math
-\cos{\theta_z} = \sin{\phi} \sin{\delta} + \cos{h} \cos{\delta} \cos{\phi}
-```
-The cosine of the zenith angle is the useful percentage of ``S_0`` which strikes the earth's surface.
-What does the first term on the right-hand side express? And the second?
-Of course, negative insolation does not exist... negative values of ``\cos{\theta_z}`` indicate nighttime, for which ``Q=0``. Sunrise and sunset occur when ``cos(\theta_z) = 0``, then the sunset (and sunrise) hour angle (``h_{ss}``) depends on declination and latitude as follows
-```math
-\cos{h_{ss}} = - \tan{\phi}\tan{\delta}
-```
-
-##### Polar Sunrise and Sunset
-
-Due to the inclination of the earth's axis, some regions experience days and nights that extend beyond 24 hours. This phenomenon is called Polar day and Polar night. The longest days and nights are at -90/90 ᵒN (the poles), which experience a single day and night in the year. Polar sunrise and sunset occur at a latitude that satisfies
-```math
-|\phi| > 90ᵒ - |\delta|
-```
-``\delta`` and ``\phi`` of the same sign mean that the sun is rising, vice-versa, if the signs are opposite the sun is setting
-
-##### Daily Insolation
-
-Let's calculate the daily insolation (in 24 hr). Since we express the day in ``2\pi`` angles and ``Q = 0`` if ``|h| > h_{ss}``
-
-```math
-\langle Q \rangle_{day}  = \frac{S_0}{2\pi} \int_{-h_{ss}}^{h_{ss}} (\sin{\phi}\sin{\delta} + \cos{\phi}\cos{\delta}\cos{h} ) \ dh
-```
-
-which is easily integrated to 
-
-```math
-\langle Q \rangle_{day}  = \frac{S_0}{\pi} \left( h_{ss}\sin{\phi}\sin{\delta}  + \cos{\phi}\cos{\delta}\sin{h_{ss}} \right)
-```
-
-"""
-
-
-# ╔═╡ 18ddf155-f9bc-4e5b-97dc-762fa83c9931
-function daily_insolation(lat; day = 80, S₀ = 1365.2)
-
-	march_first = 81.0
-	ϕ = deg2rad(lat)
-	δ = deg2rad(23.45) * sind(360*(day - march_first) / 365.25)
-
-	h₀ = abs(δ) + abs(ϕ) < π/2 ? # there is a sunset / sunrise
-		 acos(-tan(ϕ) * tan(δ)) :
-		 ϕ * δ > 0 ? π : 0.0 # all day or all night
-		
-	# Zenith angle corresponding to the average daily insolation
-	cosθₛ = h₀*sin(ϕ)*sin(δ) + cos(ϕ)*cos(δ)*sin(h₀)
-	
-	Q = S₀/π * cosθₛ 
-
-	return Q
-end
-
-# ╔═╡ 87fdc7c2-536e-4aa1-9f68-8aec4bc7069d
-md""" day $(@bind day_in_year PlutoUI.Slider(1:365, show_value=true)) """
-
-# ╔═╡ 8d4d8b93-ebfe-41ff-8b9e-f8931a9e83c2
-begin
-	latitude = -90:90
-	δ = (23 + 27/60) * sind(360*(day_in_year - 81.0) / 365.25)
-	
-	polar_ϕ = 90 - abs(δ)
-
-	function day_to_date(day)
-		months = (:Jan, :Feb, :Mar, :Apr, :May, :Jun, :Jul, :Aug, :Sep, :Oct, :Nov, :Dec)
-		days_in_months   = (30, 28, 31, 30, 31, 30, 31, 31, 30, 31, 31, 31)
-		days_till_months = [1, [sum(days_in_months[1:i])+1 for i in 1:11]...]
-
-		month = searchsortedlast(days_till_months, day)
-		day_in_month = month > 1 ? day - sum(days_in_months[1:month-1]) : day
-		
-		return "$(day_in_month) " * string(months[month])
-	end
-	
-	Q = daily_insolation.(latitude; day = day_in_year)
-	fig = Figure(resolution = (700, 300))
-	ax = Axis(fig[1, 1], title = "Daily average insolation, Day: $(day_in_year) ($(day_to_date(day_in_year)))", xlabel = "latitude ᵒN", ylabel ="daily ⟨Q⟩ Wm⁻²")
-	lines!(ax, latitude, Q, linewidth = 2, color=:red)
-	lines!(ax,  polar_ϕ*[1, 1], [0, 600], linestyle=:dash, color=:yellow)
-	lines!(ax, -polar_ϕ*[1, 1], [0, 600], linestyle=:dash, color=:yellow)
-	ax.xticks = [-90, -90+23, -25, -50, 0, 25, 50, 90-23, 90]
-	ylims!(ax, -10, 600)
-	
-	md"""
-	$(current_figure())
-	**Figure**: daily average insolation in Wm⁻². The yellow lines correspond to the latitude of polar sunset (sunrise), above (below) which it is only night (day) 
-
-	$(Resource("https://ars.els-cdn.com/content/image/1-s2.0-S0074614202800171-gr8.jpg", :height => 400))
-	**Figure**: Daily mean solar insolation (Q/24 hr) as a function of latitude and day of year in units of W m−2 based on a solar constant of 1366 W m−2. The shaded areas denote zero insolation. The position of vernal equinox (VE), summer solstice (SS), autumnal equinox (AE), and winter solstice (WS) are indicated with solid vertical lines. Solar declination is shown with a dashed line (K.N. Liou, An Introduction to Atmospheric Radiation, 2002, chapter 2)
-	"""
-end
-
-# ╔═╡ 25223f7b-22f7-46c2-9270-4430eb6c186e
-begin
-	function annual_mean_insolation(lat; S₀ = 1365.2)
-		Q_avg = 0
-		for day in 1:365
-			Q_avg += daily_insolation(lat; day, S₀) / 365
-		end
-
-		return Q_avg
-	end
-	
-	Q_avg = zeros(length(-90:90))
-	for (idx, lat) in enumerate(-90:90)
-		Q_avg[idx] += annual_mean_insolation(lat)
-	end
-
-	fm = Figure(resolution = (700, 300))
-	am = Axis(fm[1, 1], title = "Yearly average insolation", xlabel = "latitude ᵒN", ylabel ="yearly ⟨Q⟩ Wm⁻²")
-	lines!(am, -90:90, Q_avg)
-
-	md"""
-	For our purposes, let's forget about the seasons and calculate the yearly average mean isolation
-
-	```math
-	\langle Q \rangle_{\text{yr}} = \frac{1}{365}\sum_{\text{day} = 1}^{365} \langle Q \rangle_{\text{day}}
-	```
-	
-	$(current_figure())
-	**Figure**: Annual mean insolation
-	
-	we can see that, indeed, the average insolation is much lower at the poles compared the equator! This is reassuring since the poles are colder than the equator!
-	
-	"""
-end
-
-
-# ╔═╡ 034fc483-b188-4b2a-891a-61b76c74072d
-md"""
-## Solving the climate system: equilibrium solution
-
-Let us remember the system of ODE we defined that governs the surface and atmospheric temperature. \
-The forcing will now be latitude-dependent, giving a latitude-dependent temperature
-
-```math
-\begin{align}
-C_a \frac{d T_a}{dt} & = \varepsilon \sigma T_s ^4 - 2\varepsilon \sigma T_a^4 \\
-C_s \frac{d T_s}{dt} & = \varepsilon \sigma T_a^4 - \sigma T_s ^4 + (1 - \alpha)  Q(\phi)
-\end{align}
-```
-
-(Q is the yearly averaged latitudinal forcing)
-The system is at equilibrium when all the derivatives in time are zero \
-(i.e the system does not evolve in time anymore)
-```math
-\begin{align}
-& \varepsilon \sigma T_{E,s}^4 - 2\varepsilon \sigma T_{E,a}^4 = 0 \\
-& \varepsilon \sigma T_{E,a}^4 - \sigma T_{E,s}^4 + (1 - \alpha) Q(\phi) = 0
-\end{align}
-```
-
-which yields
-```math
-\begin{align}
-& T_{E,a}(\phi) = \sqrt[4]{\frac{(1 - \alpha) Q (\phi)}{\sigma (2 - \varepsilon)}} \\
-& T_{E,s}(\phi) = \sqrt[4]{\frac{2(1 - \alpha) Q (\phi)}{\sigma (2 - \varepsilon)}}
-\end{align}
-```
-"""
-
-# ╔═╡ 5d31e2a8-e357-4479-bc48-de1a1b8bc4d4
-md"""
-## Solving the climate system: numerical solution
-
-The equilibrium solution is good, but it is good to keep the time derivative to see the evolution in case the forcing changes. To do this we can solve our system of ODEs numerically.
-
-Let's see how to do this with two different methods:
-- explicit time stepping
-- implicit time stepping
-
-We first assume that the time derivative can be written simply as
-```math
-\frac{d T}{dt} = \frac{T^{(n+1)} - T^{(n)}}{\Delta t}
-```
-where the ``n`` superscript stands for the time instant ``t(n)`` and ``n+1`` is ``t(n+1) = t(n) + \Delta t``
-
-Now we can rewrite the equations as
-```math 
-\begin{align}
-C_a T_a^{(n+1)} & = C_a T_a^{(n)} + \Delta t G_a \\
-C_s T_s^{(n+1)} & = C_s T_s^{(n)} + \Delta t G_s 
-\end{align}
-```
-where ``G`` are the _tendency terms_ defined as
-```math
-\begin{align} 
-G_a & = \varepsilon \sigma T_s ^4 - 2\varepsilon \sigma T_a^4  \\ 
-G_s & = \varepsilon \sigma T_a^4 - \sigma T_s ^4 + F 
-\end{align}
-```
-and ``F`` is the _forcing_
-```math
-F = (1-\alpha) Q
-```
-
-#### Explicit time stepping
-
-\
-
-The tendencies are calculated at time ``n``, so the update rule becomes:
-```math 
-\begin{align}
-T_a^{(n+1)} & = T_a^{(n)} + \frac{\Delta t}{C_a} G_a^{(n)} \\
-T_s^{(n+1)} & = T_s^{(n)} + \frac{\Delta t}{C_s} G_s^{(n)} 
-\end{align}
-```
-It is called _explicit_ because the values of ``G_a^{(n)}`` and ``G_s^{(n)}`` are readily available and the update rule for the time step ``n+1`` is explicit.
-Explicit time stepping is fast and simple to implement, but, as we will see later it has some shortcomings when time stepping with large ``\Delta t`` is required
-
-#### Implicit time stepping
-
-\
-
-The tendencies are calculated at time ``n+1``. This means that they are not readily available and we have to relate them to temperatures at time ``n+1``. Then
-```math
-\begin{align} 
-G_a^{(n+1)} & = \varepsilon \sigma \left(T_s^{(n+1)}\right) ^4 - 2\varepsilon \sigma \left(T_a^{(n+1)}\right)^4 \\ 
-G_s^{(n+1)} & = \varepsilon \sigma \left(T_a^{(n+1)}\right)^4 - \sigma \left(T_s^{(n+1)}\right)^4 + F
-\end{align}
-```
-Those fourth powers are a little bit annoying... \
-Let's simplify them a bit! \
-Let's assume that temperature does not change significantly in one time step \
-``T^{(n+1)} - T^{(n)} \ll T^{(n)}`` \
-we can then linearize the fourth power of temperature
-```math
-\left(T^{(n+1)}\right)^4 \approx \left(T^{(n)}\right)^3 T^{(n+1)}
-```
-
-```math
-\begin{align} 
-G_a^{(n+1)} & = \varepsilon \sigma \left(T_s^{(n)}\right)^3 T_s^{(n+1)} - 2\varepsilon \sigma \left(T_a^{(n)}\right)^3 T_a^{(n+1)} \\ 
-G_s^{(n+1)} & = \varepsilon \sigma \left(T_a^{(n)}\right)^3 T_a^{(n+1)} - \sigma \left(T_s^{(n)}\right)^3 T_s^{(n+1)} + F
-\end{align}
-```
-
-Substituting the expressions for the tendencies in the update equations we get
-```math
-\begin{align}
-\left(C_a + \Delta t 2 \varepsilon \sigma \left(T_a^{(n)}\right)^3\right) T_a^{(n+1)} - \Delta t \varepsilon \sigma \left(T_s^{(n)}\right)^3 T_s^{(n+1)} & = C_a T_a^{(n)}\\
-\left( C_s  + \Delta t \sigma\left(T_s^{(n)}\right)^3 \right) T_s^{(n+1)} - \Delta t \varepsilon \sigma \left(T_a^{(n)}\right)^3 T_a^{(n+1)} & = C_s T_s^{(n)} + \Delta t F
-\end{align}
-```
-
-This is a system of linear equations in the variables ``T = [T_a^{(n+1)}``; ``T_s^{(n+1)}]`` representable as the linear system
-```math
-A T = b
-```
-where the matrix ``A`` is
-```math
-A = \begin{bmatrix}
-C_a  + \Delta t 2 \varepsilon \sigma \left(T_a^{(n)}\right)^3 & - \Delta t\varepsilon \sigma \left(T_s^{(n)}\right)^3 \\
- - \Delta t  \varepsilon \sigma \left(T_a^{(n)}\right)^3  &  
-C_s  + \Delta t \sigma\left(T_s^{(n)}\right)^3 \\ 
-\end{bmatrix}
-```
-and the right hand side (``b``) is
-```math
-b = 
-\begin{bmatrix}
-C_a T_a^{(n)} \\ C_s T_s^{(n)} + \Delta t F
-\end{bmatrix}
-```
-
-"""
-
-# ╔═╡ 724901e9-a19a-4d5f-aa6a-79ec0f230f24
-md"""
-# Let's code our model in Julia
-
-We can start creating a ```struct``` that contains the information we need, i.e., the parameters of the system, the state of the system and the solution method
-
-Some comments: 
-- Temperature (and forcing) can be either a Scalar or a Vector
-- To retrieve parameters of the `struct` it is useful to write functions that we can later extend
-- It is convenient to write a constructor with some default values and a `show` method 
-"""
 
 # ╔═╡ 15dee5d8-e995-4e5a-aceb-48bcce42e76d
 md"""
@@ -488,70 +139,6 @@ begin
 	const Cₛ = 1000.0 * 4186.0 * 100 / (3600 * 24) #  ρ * c * H / seconds_per_day
 	const Cₐ = 1e5 / 10 * 1000 / (3600 * 24)       # Δp / g * c / seconds_per_day
 end
-
-# ╔═╡ 039ec632-d238-4e63-81fc-a3225ccd2aee
-latitude_dependent_equilibrium_temperature(lat, ε, α) =  
-                 (2 * annual_mean_insolation(lat) * (1 - α) / (2 - ε) / σ )^(1/4)
-
-# ╔═╡ 1431b11f-7838-41da-92e3-bcca9f4215b3
-begin 
-	mutable struct ZeroDModel{S, T, E, A, F, C}
-		stepper :: S  # Implicit or explicit time stepping
-		Tₛ :: T       # surface temperature
-		Tₐ :: T       # atmospheric temperature
-		ε  :: E       # atmospheric emissivity
-		α  :: A       # surface albedo
-		Q  :: F       # forcing
-		Cₛ :: C       # surface heat capacity
-		Cₐ :: C       # atmospheric heat capacity
-	end
-
-	# Types that specify the time stepping method
-	struct ExplicitTimeStep end
-	struct ImplicitTimeStep end
-
-	const ExplicitZeroDModel = ZeroDModel{<:ExplicitTimeStep}
-	const ImplicitZeroDModel = ZeroDModel{<:ImplicitTimeStep}
-
-	# Let's define functions to retrieve the properties of the model.
-	# It is always useful to define functions to extract struct properties so we 
-	# have the possibility to extend them in the future
-	# emissivity and albedo
-	albedo(model)     = model.α
-	emissivity(model) = model.ε
-
-	# Utility functions to @show the model
-	timestepping(model::ExplicitZeroDModel) = "Explicit"
-	timestepping(model::ImplicitZeroDModel) = "Implicit"
-
-	# A pretty show method that displays the model's parameters
-	function Base.show(io::IO, model::ZeroDModel)
-		print(io, "Zero-D energy budget model with:", '\n',
-		"├── time stepping: $(timestepping(model))", '\n',
-		"├── length model: $(length(model.Tₛ))", '\n',
-    	"├── ε: $(emissivity(model))", '\n',
-        "├── α: $(albedo(model))", '\n',
-        "└── Q: $(model.Q) Wm⁻²")
-	end
-
-	# A constructor with some defaults...
-	function ZeroDModel(step=ImplicitTimeStep(); 
-						ε=0.75, 
-					    α=0.2985, 
-						ϕ=range(-89.0, 89.0,length=90))
-		N = length(ϕ)
-		Q = annual_mean_insolation.(ϕ)
-		Tₛ_init = 200.0 .* ones(N)
-		Tₐ_init = 180.0 .* ones(N)
-
-		args = (Tₛ_init, Tₐ_init, ε, α, Q, Cₛ, Cₐ)
-		return ZeroDModel(step, args...)
-	end
-end
-
-# ╔═╡ de5d415f-8216-473d-8e0b-a73139540e1e
-# Let's test the constructor and the show method
-test_model = ZeroDModel(ϕ = 45)
 
 # ╔═╡ b85fdf41-ef8f-4314-bc3c-383947b9f02c
 @bind values PlutoUI.combine() do Child
@@ -718,11 +305,6 @@ md"""
 ## Outgoing Radiation
 """
 
-# ╔═╡ 901548f8-a6c9-48f8-9c8f-887500081316
-md"""
-# Section 2.4: Heat transport
-"""
-
 # ╔═╡ 8f963bc5-1900-426d-ba1f-078ed45b48d3
 md"""
 # Global atmospheric circulation
@@ -863,24 +445,6 @@ begin
 	albedo(model::OneDModel{<:Any, <:Any, <:Any, <:Any, <:Function}) = model.α(model)
 	
 	test_1D_model = OneDModel(ImplicitTimeStep(), 90)
-end
-
-# ╔═╡ a93c36c9-b687-44b9-b0b6-5fe636ab061c
-# Remember that our temperature can be a scalar or a vector, 
-# depending on the latitude given to construct the model
-
-function time_step!(model::ExplicitZeroDModel, Δt)
-	Tₛ = model.Tₛ
-	Tₐ = model.Tₐ
-
-	α = albedo(model)
-	ε = emissivity(model)
-
-	Gₛ = @. σ * (ε * Tₐ^4 - Tₛ^4) + (1 - α) * model.Q 
-	Gₐ = @. σ * ε * (Tₛ^4 - 2*Tₐ^4)
-
-	@. model.Tₛ += Δt * Gₛ / model.Cₛ
-	@. model.Tₐ += Δt * Gₐ / model.Cₐ
 end
 
 # ╔═╡ c0ff6c61-c4be-462b-a91c-0ee1395ef584
@@ -2856,24 +2420,8 @@ version = "3.5.0+0"
 
 # ╔═╡ Cell order:
 # ╟─d8e3d937-bcda-4c84-b543-e1324f696bbc
-# ╟─8ef88534-dac4-4a62-b623-dcaf63482a96
-# ╟─cfb8f979-37ca-40ab-8d3c-0053911717e7
-# ╟─a16912cc-10a9-44b7-884e-e415ffd20a5d
-# ╟─52d35593-b841-4c76-8657-0f0f5c9b2f85
-# ╟─eb95e773-b12a-40a4-a4f1-9dced86fc8a2
-# ╟─75cacd05-c9f8-44ba-a0ce-8cde93fc8b85
-# ╠═18ddf155-f9bc-4e5b-97dc-762fa83c9931
-# ╟─87fdc7c2-536e-4aa1-9f68-8aec4bc7069d
-# ╟─8d4d8b93-ebfe-41ff-8b9e-f8931a9e83c2
-# ╟─25223f7b-22f7-46c2-9270-4430eb6c186e
-# ╟─034fc483-b188-4b2a-891a-61b76c74072d
-# ╠═039ec632-d238-4e63-81fc-a3225ccd2aee
-# ╟─5d31e2a8-e357-4479-bc48-de1a1b8bc4d4
-# ╟─724901e9-a19a-4d5f-aa6a-79ec0f230f24
-# ╠═1431b11f-7838-41da-92e3-bcca9f4215b3
-# ╠═de5d415f-8216-473d-8e0b-a73139540e1e
+# ╠═a16912cc-10a9-44b7-884e-e415ffd20a5d
 # ╟─15dee5d8-e995-4e5a-aceb-48bcce42e76d
-# ╠═a93c36c9-b687-44b9-b0b6-5fe636ab061c
 # ╟─2287bff1-6fb0-4431-8e15-aff3d7b6e005
 # ╠═c0ff6c61-c4be-462b-a91c-0ee1395ef584
 # ╟─e24e54a7-804e-40e8-818e-8766e5e3732b
@@ -2896,7 +2444,6 @@ version = "3.5.0+0"
 # ╟─816c0de5-1ad1-4084-bf1e-331760287e25
 # ╟─4640a179-3373-4901-ac31-31022e8c7eb2
 # ╟─6df6c4df-9b1b-46d2-aaa5-b3c789e59b99
-# ╟─901548f8-a6c9-48f8-9c8f-887500081316
 # ╟─8f963bc5-1900-426d-ba1f-078ed45b48d3
 # ╟─567fa8d3-35b4-40d7-8404-ae78d2874380
 # ╟─0d8fffdc-a9f5-4d82-84ec-0f27acc04c21
