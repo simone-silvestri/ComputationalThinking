@@ -1292,9 +1292,9 @@ end
 
 # ╔═╡ c98fcf26-d715-47c2-84ac-63bffe02d813
 md"""
-Is this a sensible diffusivity value? We know that heat transport is caused by atmospheric circulation, so what is a plausible value of the diffusivity caused by atmospheric motion? If we take into account the velocity of a typical atmospheric eddy ``V``, the order of magnitude of the flux is ``V \cdot T`` (where ``T`` is a temperature scale). We parameterize this with a term that looks like ``K \cdot T / L`` where ``K`` is our diffusivity expressed in m²/s and ``L`` is a typical length scale of movement in the atmosphere. Then it should hold that
+Is this a sensible conductivity value? Heat transport is caused by atmospheric circulation, so what is a plausible value of the diffusivity caused by atmospheric motion? If we take into account the velocity of a typical atmospheric eddy ``V``, the order of magnitude of the flux is ``V \cdot T`` (where ``T`` is a temperature scale). We parameterize this with a term that looks like ``K \cdot T / L`` where ``K`` is our diffusivity expressed in m²/s and ``L`` is a typical length scale of movement in the atmosphere. Then it should hold that
 ```math
-K \cdot T / L \sim V \cdot T 
+K \cdot\frac{T}{L} \sim V \cdot T 
 ```
 If we fill in typical values for atmospheric velocity and length scales (about ``20`` m/s and ``2000`` km) we get that
 ```math
@@ -1308,8 +1308,6 @@ This diffusivity corresponds to a conductivity ``\kappa`` (in W/m²K) of
 
 # ╔═╡ 6534f98d-1270-4e7c-8ce8-66a6b1ee48f7
 begin	
-
-	
 	HF(model) = model.κₛ .* explicit_diffusion(model.Tₛ, deg2rad(2), model.ϕᶠ, model.ϕᶜ) 
 
 	plot_latitudinal_variables!(ϕ, [ASR(model_1D), 
@@ -1320,8 +1318,6 @@ begin
 									[:solid, :dash, :solid, :dash, :solid],
 									ylabel = "Energy Budget Wm⁻²",
 									leg_pos = :cc)
-
-	
 	md"""
 	$(current_figure())
 	**Figure**: Energy budget for a climate with transport.
@@ -1330,12 +1326,7 @@ end
 
 # ╔═╡ 77a73a9d-9d78-4cf5-ae19-f1107fa5b4c2
 begin
-
-	plot_latitudinal_variables!(ϕ, [HF(model_1D)], ["diffusion source/sink"], [:red], [:solid], leg_pos = :ct)
-
 	md"""
-	$(current_figure())
-
 	
 	Heat flux can only redistribute energy. It is then important to check that our solution method does not create or destroy energy.
 	Let's compute the integral of the transport term in latitude
@@ -2976,7 +2967,7 @@ version = "3.5.0+0"
 # ╟─a046b625-b046-4ca0-adde-be5249a420f4
 # ╠═514ee86b-0aeb-42cd-b4cd-a795ed23b3de
 # ╟─c98fcf26-d715-47c2-84ac-63bffe02d813
-# ╟─6534f98d-1270-4e7c-8ce8-66a6b1ee48f7
+# ╠═6534f98d-1270-4e7c-8ce8-66a6b1ee48f7
 # ╟─77a73a9d-9d78-4cf5-ae19-f1107fa5b4c2
 # ╠═80c72898-139e-44af-bab0-ca638f282188
 # ╟─b0ca64b8-0211-4d1c-b007-7583bf8ac908
