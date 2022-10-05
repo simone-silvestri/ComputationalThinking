@@ -101,10 +101,7 @@ Let us explore how to accurately model the insolation depending on those three p
 md"""
 ##### Latitudinal dependency (angle ``\phi``)
 
-Different parts of Earth’s surface receive different amounts of sunlight (Figure below). \
-The Sun’s rays strike Earth’s surface most directly at the equator. This focuses the rays on a small area. \
-Near the poles, the Sun’s rays strike the surface at a slant. This spreads the rays over a wide area. \
-The more focused the rays are, the more energy an area receives, and the warmer it is.
+Different parts of Earth’s surface receive different amounts of sunlight (Figure below). The Sun’s rays strike Earth’s surface most directly at the equator. This focuses the rays on a small area.  Near the poles, the Sun’s rays strike the surface at a slant. This spreads the rays over a wide area.  The more focused the rays are, the more energy an area receives, and the warmer it is.
 
 $(Resource("https://static.manitobacooperator.ca/wp-content/uploads/2020/02/18151642/insolation_CMYK.jpg#_ga=2.245013061.1375356746.1664813564-1302273094.1664813564", :height => 300))
 
@@ -119,10 +116,10 @@ The declination of the sun is the angle between the equator and a line drawn fro
 The declination, in degrees, for any given day may be calculated (approximately) with the equation:
 
 ```math
-\delta = 23.45^\circ \sin{\left(\frac{360}{365.25} \cdot (\text{day} - 80)\right)}
+\delta = 23.45^\circ \sin{\left(\frac{360}{365.25} \cdot (\text{day} - 81)\right)}
 ```
 
-where ``\text{day}`` starts from 1 on the 1st of January and ends at 365 on December 31st, while the 80th day is the spring equinox (22nd of March), where the earth's axis is perpendicular to the orbit
+where ``\text{day}`` starts from 1 on the 1st of January and ends at 365 on December 31st, while the 81st day is the spring equinox (22nd of March), where the earth's axis is perpendicular to the orbit
 
 
 
@@ -134,12 +131,12 @@ $(Resource("https://ars.els-cdn.com/content/image/3-s2.0-B9780080247441500061-f0
 md"""
 ### Bringing it all together
 
-We can sum up all these variations in the _zenith angle_, the incident angle between the incoming solar rays and the earth's surface. We model the instantaneous solar flux with
+We model the instantaneous solar flux with
 ```math
 Q \approx S_0 \left( \underbrace{\sin{\phi} \sin{\delta} + \cos{h} \cos{\delta} \cos{\phi}}_{\cos{\theta_z}} \right)
 ```
 
-where ``\theta_z`` is the angle in the figure below
+where ``\theta_z`` is the zenith angle, shown in the figure below
 
 $(Resource("https://ars.els-cdn.com/content/image/3-s2.0-B9780128121498000028-f02-02-9780128121498.jpg", :height => 300))
 **Figure:** Zenith angle, (M. Rosa-Clot & G. Tina, Submerged and Floating Photovoltaic Systems, 2018, chapter 2)
@@ -162,7 +159,7 @@ Due to the inclination of the earth's axis, some regions experience days and nig
 
 ##### Daily Insolation
 
-Let's calculate the daily insolation (in 24 hr). Since we express the day in ``2\pi`` angles and ``Q = 0`` if ``|h| > h_{ss}``
+Let's calculate the daily insolation (in 24 hr). Since we express the day in ``2\pi`` radians and ``Q = 0`` if ``|h| > h_{ss}``
 
 ```math
 \langle Q \rangle_{day}  = \frac{S_0}{2\pi} \int_{-h_{ss}}^{h_{ss}} (\sin{\phi}\sin{\delta} + \cos{\phi}\cos{\delta}\cos{h} ) \ dh
@@ -178,9 +175,9 @@ which is easily integrated to
 
 
 # ╔═╡ 18ddf155-f9bc-4e5b-97dc-762fa83c9931
-function daily_insolation(lat; day = 80, S₀ = 1365.2)
+function daily_insolation(lat; day = 81, S₀ = 1365.2)
 
-	march_first = 80.0
+	march_first = 81.0
 	ϕ = deg2rad(lat)
 	δ = deg2rad(23.45) * sind(360*(day - march_first) / 365.25)
 
@@ -208,7 +205,7 @@ begin
 
 	function day_to_date(day)
 		months = (:Jan, :Feb, :Mar, :Apr, :May, :Jun, :Jul, :Aug, :Sep, :Oct, :Nov, :Dec)
-		days_in_months   = (30, 28, 31, 30, 31, 30, 31, 31, 30, 31, 31, 31)
+		days_in_months   = (31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 31, 31)
 		days_till_months = [1, [sum(days_in_months[1:i]) for i in 1:11]...]
 
 		month = searchsortedlast(days_till_months, day)
@@ -306,7 +303,7 @@ which yields
 md"""
 ## Solving the climate system: numerical solution
 
-The equilibrium solution is a good approximation, but the climate is always evolving, so it is important to be able to solve the ODE system. The problem is too complicated to be solved analytically, but we can easily solve it numerically. A numerical solution of a differential equation is an approximation of the analytical solution usually computed by _discretizing_ the derivatives.
+The equilibrium solution is a good approximation, but the climate is always evolving, so being able to solve the time-dependent system is important for climate predictions. The system is too complicated to be solved analytically, but we can easily solve it numerically. A numerical solution of a differential equation is an approximation of the analytical solution usually computed by _discretizing_ the derivatives.
 
 Let's see how to do this with two different methods:
 - explicit time stepping
@@ -410,10 +407,10 @@ C_a T_a^{(n)} \\ C_s T_s^{(n)} + \Delta t F
 md"""
 # Let's code our model in Julia
 
-We can start creating a ```struct``` that contains the information we need, i.e., the parameters of the system, the state of the system and the solution method
+We can start creating a ```struct``` that contains the information we need, i.e., the parameters, the state, and the solution method of the system.
 
 Some comments: 
-- Temperature (and forcing) are vectors depending on the discrete latitude grid ``\phi``
+- Temperature (and forcing) are vectors depending on the discrete latitudinal grid ``\phi``
 - To retrieve parameters of the `struct` it is useful to write functions that we can later extend
 - It is convenient to write a constructor with some default values and a `show` method 
 """
@@ -458,12 +455,12 @@ where the diagonal terms are the sink terms, while the off-diagonal are the inte
 
 # ╔═╡ e24e54a7-804e-40e8-818e-8766e5e3732b
 md"""
-With the function to construct the matrix at each time step, we can code the time stepping method by introducing the rhs and solving the linear system
+Implicit time stepping implies constructing the matrix, calculating the rhs and solving the linear system
 """
 
 # ╔═╡ 049e2164-24ac-467c-9d96-77510ac6ff57
 md"""
-Let's verify that both our model reaches equilibrium if time stepped either implicitly or explicitly.
+Let's verify that our model reaches equilibrium with both implicit and explicit time stepping.
 
 Some constants to be defined:
 - the stefan Boltzmann constant (σ) in [Wm⁻²K⁻⁴]
@@ -507,8 +504,8 @@ begin
 	# It is always useful to define functions to extract struct properties so we 
 	# have the possibility to extend them in the future
 	# emissivity and albedo
-	@inline albedo(model)     = model.α
-	@inline emissivity(model) = model.ε
+	albedo(model)     = model.α
+	emissivity(model) = model.ε
 
 	# Utility functions to @show the model
 	timestepping(model::ExplicitZeroDModel) = "Explicit"
@@ -575,20 +572,18 @@ end
 md"""
 ## Stability of time stepping methods
 
-why did the temperature explode with a large time step? \
-
-Let's analyze this by simplifying a bit our discretized atmospheric equation. Let's remove the coupling with the surface temperature. This is like saying that all of a sudden the atmosphere becomes transparent to the radiation coming from the earth (unlikely)
+Temperature starts oscillating and then explodes when using a large Δt, this is because of the intrinsic stability of the time stepping method. 
+Let's analyze this by simplifying a bit our discretized atmospheric equation. We remove the coupling between the surface and the atmosphere. This is like saying that all of a sudden the atmosphere becomes transparent to the radiation coming from the earth (unlikely)
 ```math
 C_a \frac{T_a^{(n+1)} - T_a^{(n)}}{\Delta t} = -2\varepsilon \sigma T_a^4
 ```
-Since there is no source anymore, the temperature will exponentially decrease until it reaches an equilibrium temperature of 0 K. 
-
+Since there is no source, the temperature will exponentially decrease until it reaches equilibrium at 0 K. \
 let us define
 ```math
 D = \frac{2 \varepsilon \sigma \left( T_a^{(n)}\right)^3}{C_a}
 ```
 
-then the update rule for the explicit time stepping can be written as
+The update rule for the explicit time stepping is
 ```math
 T_a^{(n+1)} = T_a^{(n)}(1 - D \Delta t)
 ```
@@ -611,29 +606,30 @@ What happens for implicit time stepping? We have that
 Since ``D > 0``, implicit time stepping is stable for _any_ positive ``\Delta t`` \
 
 In summary, for an ODE: 
-- _Explicit time stepping_ is generally **_conditionally stable_**, i.e. the discrete system is stable given that ``\Delta t < C`` where ``C`` depends on the system. 
+- _Explicit time stepping_ is generally **_conditionally stable_**, i.e. the discrete system is stable given ``\Delta t < C`` where ``C`` depends on the system. 
 - _Implicit time stepping_, on the other hand, is generally **_unconditionally stable_**
 """
 
-# ╔═╡ 6b770afa-bf99-49eb-9489-367d9de58780
+# ╔═╡ ea517bbf-eb14-4d72-a4f4-9bb823e02f88
 md"""
-Now that we know our model works, we can define a function which evolves it till the desired end time
+# Predicting earth's temperature distribution
 """
 
 # ╔═╡ 140bcdac-4145-47b3-952f-bfe50f6ed41c
 md"""
-Let's calculate the equilibrium temperature of the climate system with a variable forcing. 
-How does this temperature profile compare to the observed temperature profile?
-
 $(Resource("https://www.researchgate.net/profile/Anders-Levermann/publication/274494740/figure/fig9/AS:668865801506834@1536481442913/a-Surface-air-temperature-as-a-function-of-latitude-for-land-dashed-line-corrected.png", :height => 400))
 
 **Figure**: Observed temperature profile from: Feulner et al, _On the Origin of the Surface Air Temperature Difference between the Hemispheres in Earth's Present-Day Climate_ (2013), Journal of Climate.
 """
 
+# ╔═╡ 849775fa-4990-47d3-afe0-d0a049bb90af
+md"""
+We download the annually and zonally average observed temperature and radiation profiles from `https://github.com/simone-silvestri/ComputationalThinking/raw/main/` using the Julia package DataDeps and open it using the JLD2 package
+"""
+
 # ╔═╡ 4d517df8-0496-40a2-8e44-5beda6cd7226
 # ╠═╡ show_logs = false
 begin
-
 	# We use the package DataDeps to download the data stored at `online_path`
 	ENV["DATADEPS_ALWAYS_ACCEPT"]="true"	
 	
@@ -641,9 +637,8 @@ begin
 
 	dh = DataDep("computional_thinking_data",
 	    "Data for class",
-	    [online_path * "observed_radiation.jld2",
-	     online_path * "observed_T.jld2",
-		 online_path * "detailed_radiation_T.jld2"]
+	    [online_path * "observed_radiation.jld2",   # Observed ASR and OLR (absorbed shortwave and outgoing longwave radiation)
+	     online_path * "observed_T.jld2"]
 		)
 
 	DataDeps.register(dh)
@@ -651,69 +646,67 @@ begin
 	datadep"computional_thinking_data"
 
 	obs_temp_path = @datadep_str "computional_thinking_data/observed_T.jld2"
-	det_temp_path = @datadep_str "computional_thinking_data/detailed_radiation_T.jld2"
 	obs_rad_path  = @datadep_str "computional_thinking_data/observed_radiation.jld2"
 	
-	# Load the observed zonally averaged temperature profile
+	# Load the observed zonally and yearly averaged temperature profile
 	T_obs = jldopen(obs_temp_path)["T"]
-	# load the "corrected" temperature profile given a variable H₂O concentration (depending on T and p), 
-	# a constant CO₂ concentration, and a detailed infrared absorption based on spectral radiation.	
-	T_rad = jldopen(det_temp_path)["T"]
+end
+
+# ╔═╡ b5d7b8b7-b797-4157-a814-1df2b3a8d2aa
+md"""
+##### Usefull plotting function
+to plot variables as a function of ``\phi``
+"""
+
+# ╔═╡ 0331aa02-a0a0-4f4f-b3cc-b7ced5357edc
+# Function for plotting variables vars of size `length(ϕ)` vs ϕ
+function plot_latitudinal_variables!(ϕ, vars, labels, colors, styles; 
+									 ylabel  = "Temperature [ᵒC]", 
+									 ylims   = nothing, 
+									 title   = nothing, 
+									 leg_pos = :cb,
+									 ax_pos  = [1, 1],
+									 fig     = nothing,
+									 res     = (700, 350))
+	if isnothing(fig)
+		fig = Figure(; resolution = res)
+	end
+	if !isnothing(title)
+		axis = Axis(fig[ax_pos...]; title, ylabel, xlabel = "latitude [ᵒN]")	
+	else
+		axis = Axis(fig[ax_pos...]; ylabel, xlabel = "latitude [ᵒN]")	
+	end
+	colors = 
+	for (var, label, color, linestyle) in zip(vars, labels, colors, styles)
+		lines!(axis, ϕ, var; linestyle, label, color)
+	end
+	axislegend(axis, position = leg_pos, framevisible = false)
+	if !isnothing(ylims)
+		ylims!(axis, ylims)
+	end
+
+	return fig
 end
 
 # ╔═╡ 6932b969-0760-4f09-935a-478ac56de262
-md""" ε $(@bind ε PlutoUI.Slider(0:0.01:1, show_value=true, default = 0.75)) """
+md""" ε $(@bind ε PlutoUI.Slider(0:0.01:1, show_value=true, default = 0.0)) """
 
-# ╔═╡ 5884999f-f136-4ae7-8831-cc3a36f50a98
-begin
-	emissivity(model::ZeroDModel{<:Any, <:Any, <:Function}) = model.ε(model)
-	
-	md"""
-	## Feedback effects: emissivity
-	
+# ╔═╡ 6ce47d90-d5a2-43c0-ad64-27c13aa0f5db
+# ZeroDModel has parametric types {S, T, E, A, F, C} where the third one (E) corresponds to the emissivity
+emissivity(model::ZeroDModel{<:Any, <:Any, <:Function}) = model.ε(model)
 
-	Till now we assumed a constant emissivity. As you have seen in 2.2, the emissivity depends on temperature because of the increase in the water vapour saturation pressure at higher temperatures. We can linearize the effect of temperature on emissivityå
-	```math
-	\varepsilon = \varepsilon_0 + \varepsilon_1 \log{\frac{\text{CO}_2}{\text{CO}_2}} + \varepsilon_2(T-T_0)
-	```
-	Remember! The temperature in the above formula is the _surface_ temperature
-	
-	To allow having a temperature-dependent emissivity in we have to extend the ```emissivity``` method to make sure it can accept functions! We can dispatch the emissivity function to behave in a different way when the ε field of our ZeroDModel is a function
-	```
-	emissivity(model::ZeroDModel{<:Any, <:Any, <:Function}) = model.ε(model)
-	```
-	"""
-end
+# ╔═╡ 8f21fc70-e369-4938-b0c2-5a4fbae71713
+md"""
+### Global atmospheric circulation
 
-# ╔═╡ fa7d8bbd-c023-4d94-a78a-d3b3223b023f
-begin 
-	ε₀, ε₁, ε₂ = (0.75, 0.02, 0.005)
-	varε(model) = @. min(max(ε₀ + ε₁ * log2(440.0/280) + ε₂ * (model.Tₛ - 286.38), 0), 1.0)
-	
-	md"""
-	Now we can define a function that accepts the model as an input and returns the emissivity
-
-	```
-	ε₀, ε₁, ε₂ = (0.75, 0.02, 0.005)	
-	
-	varε(model) = @. min(max(ε₀ + ε₁ * log2(440.0/280) + ε₂ * (model.Tₛ - 286.38), 0), 1.0)
-	```
-	Note! Physical values of emissivity range between 0 and 1!
-	"""
-end
+There are two main factors that we have to take into account when considering large scale atmospheric circulation:
+- hot air rises
+- cold air sinks
+"""
 
 # ╔═╡ 901548f8-a6c9-48f8-9c8f-887500081316
 md"""
 # Section 2.4: Heat transport
-"""
-
-# ╔═╡ 8f963bc5-1900-426d-ba1f-078ed45b48d3
-md"""
-### Global atmospheric circulation
-
-The earth receives almost all of its energy from the sun. The earth in turn radiates back to space the energy received from the sun. As a result, the earth neither warms up nor does it get cooled over a period of time. Thus, the amount of heat received by different parts of the earth is not the same. This variation causes pressure differences in the atmosphere. This leads to transfer of heat from one region to the other by winds. This chapter explains the process of heating and cooling of the atmosphere and the resultant temperature distribution over the earth’s surface.
-
-_video_ \
 """
 
 # ╔═╡ 567fa8d3-35b4-40d7-8404-ae78d2874380
@@ -749,9 +742,9 @@ taking ``\Delta \phi \rightarrow 0``
 \mathcal{T} = - \frac{1}{2\pi R^2 \cos{\phi}} \frac{\partial F}{\partial \phi}
 ```
 
-How can we represent ``F``?
-We can think at the transport of heat by the atmosphere as moving heat from _HOT_ to _COLD_ regions of the earth. In general, this holds if we zoom out enough.
-If our ``\Delta \phi`` is large enough that the velocities are small compared to the distance of one control volume, we can think as the transport of the atmosphere as a diffusion process, which goes "DOWN" the gradient of temperature. As such we can parametrize the heat flux with an effective conductivity
+How can we represent ``F``? 
+Mathematically, the flux at the boundary of a computational element is calculated as ``(V\cdot T)``. The velocity ``V`` is the flow velocity at the interface of the element, which is determined by the Navier-Stokes equations, 3-dimensional PDEs that ensure momentum conservation in fluid dynamic systems. These equations are notoriously hard to solve, they require very fine grids due to the chaotic nature of fluid flows. Therefore, we will take a shortcut and _parametrize_ the flux at the interface (i.e., approximate the flux with a semi-empirical model).
+We can think at the transport of heat by the atmosphere as moving heat from _HOT_ to _COLD_ regions of the earth. In general, this holds if we zoom out enough. We can think of the transport by the atmosphere as a diffusion process, which goes "DOWN" the gradient of temperature. As such we can parametrize the heat flux with an effective conductivity
 ```math
 F \approx - 2\pi R^2 \cos{\phi} \cdot \kappa \frac{\partial T}{\partial \phi}
 ```
@@ -819,13 +812,13 @@ begin
 	timestepping(model::ImplicitOneDModel) = "Implicit"
 
 	# We define a constructor for the OneDModel
-	function OneDModel(step, npoints; κ = 0.55, κₛ = κ, ε = 0.5, α = 0.2985, Q = 341.3)
+	function OneDModel(step, N; κ = 0.55, κₛ = κ, ε = 0.5, α = 0.2985, Q = 341.3)
 		Cₛ = 1000.0 * 4182.0 * 100 / (3600 * 24) # ρ * c * H / seconds_per_day
 		Cₐ = 1e5 / 10 * 1000 / (3600 * 24) 		 # Δp / g * c / seconds_per_day
-		ϕᶠ = range(-π/2, π/2, length=npoints+1)
+		ϕᶠ = range(-π/2, π/2, length=N+1)
 		ϕᶜ = 0.5 .* (ϕᶠ[2:end] .+ ϕᶠ[1:end-1])
-		Tₛ = 288.0 * ones(npoints)
-		Tₐ = 288.0 * ones(npoints)
+		Tₛ = 288.0 * ones(N)
+		Tₐ = 288.0 * ones(N)
 		return OneDModel(step, Tₛ, Tₐ, κₛ, κ, ε, α, Q, Cₛ, Cₐ, ϕᶠ, ϕᶜ)
 	end
 
@@ -845,8 +838,6 @@ begin
 
 	albedo(model::OneDModel) = model.α
 	albedo(model::OneDModel{<:Any, <:Any, <:Any, <:Any, <:Function}) = model.α(model)
-	
-	test_1D_model = OneDModel(ImplicitTimeStep(), 90)
 end
 
 # ╔═╡ a93c36c9-b687-44b9-b0b6-5fe636ab061c
@@ -915,9 +906,12 @@ function time_step!(model::ImplicitZeroDModel, Δt)
 	nₐ = length(model.Tₐ)
 	nₛ = length(model.Tₛ)
 
-	@. model.Tₐ = T[1:nₐ]
-	@. model.Tₛ = T[nₐ+1:nₐ+nₛ]
+	@inbounds @. model.Tₐ .= T[1:nₐ]
+	@inbounds @. model.Tₛ .= T[nₐ+1:nₐ+nₛ]
 end
+
+# ╔═╡ abdbbcaa-3a76-4a47-824d-6da73bc71c31
+test_1D_model = OneDModel(ImplicitTimeStep(), 90)
 
 # ╔═╡ 1cef338d-5c4a-4ea5-98d7-9ac4f11922f3
 md"""
@@ -940,7 +934,7 @@ begin
 		# Calculate the flux at the interfaces
 		Flux = cos.(ϕᶠ[2:end-1]) .* (T[2:end] .- T[1:end-1]) ./ Δϕ
 		# add boundary conditions
-		# Here we use 0-flux boundary conditions
+		# We impose 0-flux boundary conditions
 		Flux = [0.0, Flux..., 0.0]
 		return 1 ./ cos.(ϕᶜ) .* (Flux[2:end] .- Flux[1:end-1]) ./ Δϕ
 	end
@@ -1079,7 +1073,7 @@ end
 # Function that evolves our model till `stop_year` with a time step of `Δt`
 function evolve_model!(model; Δt = 30.0, stop_year = 40)
 	stop_iteration = Int(stop_year * 365 ÷ Δt)
-	for iter in 1:stop_iteration
+	@inbounds for iter in 1:stop_iteration
 		time_step!(model, Δt)
 	end
 end
@@ -1087,175 +1081,149 @@ end
 # ╔═╡ 1d8a69b7-52db-4865-8bf2-712c2b6442f5
 # ╠═╡ show_logs = false
 begin 
-
-	function plot_latitudinal_variables!(ϕ, T, labels, colors, styles; ylabel = "Temperature [ᵒC]", ylims = nothing, title = nothing)
-		figure = Figure(resolution = (800, 400))
-		if !isnothing(title)
-			axis = Axis(figure[1, 1]; title, ylabel, xlabel = "latitude [ᵒN]")	
-		else
-			axis = Axis(figure[1, 1]; ylabel, xlabel = "latitude [ᵒN]")	
-		end
-		colors = 
-		for (temp, label, color, linestyle) in zip(T, labels, colors, styles)
-			lines!(axis, ϕ, temp; linestyle, label, color)
-		end
-		axislegend(axis, position = :cb, framevisible = false)
-		if !isnothing(ylims)
-			ylims!(axis, ylims)
-		end
-	end
-	
 	ϕ = range(-89, 89, length=90)
-	model_lat = ZeroDModel(; ε, ϕ)
-
+	
+	# calculating the equilibrium temperature
 	T_eq  = latitude_dependent_equilibrium_temperature.(ϕ, Ref(ε), Ref(0.2985));
-	
-	evolve_model!(model_lat, Δt = 50, stop_year = 50);
-	T_lat = model_lat.Tₛ;
 
-	temp    = [T_obs.-273.15, T_eq.-273.15, T_lat.-273.15];
-	labels  = ["observed T", "equilibrium T", "modelled T"];
-	colors  = [:black, :green, :red];
-	styles  = [:dashdot, :solid, :solid];
-	plot_latitudinal_variables!(ϕ, temp, labels, colors, styles; ylims = (-40, 40));
-	
+	# construct and evolve a zero d model with constant ε
+	model_lat = ZeroDModel(; ε, ϕ)
+	evolve_model!(model_lat, Δt = 50, stop_year = 50);
+
+	# plot the latitudinal dependent temperatures
+	plot_latitudinal_variables!(ϕ, [T_obs.-273.15, T_eq.-273.15, model_lat.Tₛ .- 273.15],
+								   ["observed T", "equilibrium T", "modelled T"],
+								   [:black, :green, :red], 
+								   [:dashdot, :solid, :solid]; ylims = (-60, 40), title = "emissivity: $ε");
 	md""" 
 	$(current_figure())
-	**Figure**: Comparison between observed (dashed-dotted line) and calculated, temperature
+	**Figure**: Comparison between observed (dashed-dotted line) and temperature calculated by the model
 	"""
 end
 
-# ╔═╡ 69acab94-5daf-4a24-9075-98126fadc166
+# ╔═╡ 5884999f-f136-4ae7-8831-cc3a36f50a98
 begin
-
-	model_feedback = ZeroDModel(ImplicitTimeStep(); ε = varε, ϕ)
-
-	evolve_model!(model_feedback, Δt = 25, stop_year = 50)
-	temp_new = [temp..., T_rad.-273.15, model_feedback.Tₛ.-273.15]
-	sty_new  = [styles..., :dash, :solid]
-	col_new  = [colors..., :blue, :blue]
-	lab_new  = [labels..., "detailed radiation T", "feedback T"]
-	
-	plot_latitudinal_variables!(ϕ, [model_feedback.Tₛ .- 273.15,
-									T_eq.-273.15,
-									T_obs .- 273, 
-									# T_rad .- 273
-									],
-									["variable ε",
-									"constant ε", 
-									"observed T",
-									"detailed radiation"], 
-									[:blue, :red, :black, :purple], 
-									[:solid, :solid, :dashdot, :dash], ylims = (-70, 70))
-
-	md"""
-	$(current_figure())
-	**Figure**: comparison between observed temperature (dashed-dotted line), temperature calculated with a constant ``\varepsilon`` (red) and with linearized water vapour feedback (blue)
-
-	Our prediction for temperature is worst with feedback!
-
-	**try it for yourself!** \
-	Add another atmospheric layer so to have two temperatures ``T_{a1}`` and ``T_{a2}``. \
-	How do the equations change? \
-	(Assume the two layers have emissivities ``\varepsilon_1`` and ``\varepsilon_2`` where ``\varepsilon_1 < \varepsilon_2``)
-	"""
-end
-
-#= 
-	**Figure**: comparison between observed temperature (dashed-dotted line), temperature calculated by a vertical 1D model with detailed description of longwave radiation (dash) and calculated by simple ZeroDModel with water vapour feedback (solid)
-
-	The solid lines have been obtained assuming that the temperature has a vertical structure, so instead of having just a 1-layer atmosphere, the atmosphere is divided in more levels and the temperature in each one is allowed to change.
-	The feedback effect is included assuming that H₂O concentration is proportional to temperature of each layer, and the emissivity is diagnosed by the detailed absorption spectra of ``\text{H}_2\text{O}``, ``\text{CO}_2`` and ``\text{O}_3``
-
-	Why is the temperature at the surface higher when we assume a vertical structure? \
-=#
-
-# ╔═╡ 1a4d9e1b-a8b3-40ec-b4d9-84caa7d43a1d
-begin 	
-	ASR_obs = jldopen("observed_radiation.jld2")["ASR"]
-	OLR_obs = jldopen("observed_radiation.jld2")["OLR"]
-
+	ASR_obs = jldopen(obs_rad_path)["ASR"]
 	ASR(model) = (1 .- albedo(model)) .* model.Q 
-
-	variables = [ASR(model_feedback), ASR_obs]
 	
-	plot_latitudinal_variables!(ϕ, [ASR(model_feedback), ASR_obs],
-								["modeled ASR", "observed ASR"],
+	plot_latitudinal_variables!(ϕ, [ASR(model_lat), ASR_obs],
+								["modeled ASR [W/m²]", "observed ASR [W/m²]"],
 								[:red, :red], 
 								[:solid, :dashdot],
-								ylabel = "Absorbed Shortwave Radiation (ASR) [W/m²]")
-	
+								ylabel = "")
 	md""" 
-	## Absorbed Shortwave Radiation
+	## Improving the model
 
-	Till now we also included a constant albedo of 0.2985 because it gave us the best fit with observations in an averaged global earth. But is an albedo of 0.2985 everywhere a good approximation when taking into account latitudinal dependency?
+	the model we constructed has several approximations which we can improve on
+	
+	### Latitude-dependent albedo
 
-	Let's look at the actual energy that our climate system absorbs, in the form of Absorbed Shortwave Radiation (ASR). We can calculate it with
+	Till now, we assumed the albedo to be equal to 0.2985 because it gave us the best fit with observations in an averaged global scenario. However, is a constant albedo a good approximation when considering latitudinal dependency? We can infer the earth's _real_ albedo by looking at the absorbed radiation at the surface (ASR or absorbed shortwave radiation). In our model we can calculate it as such
 	```
 	ASR(model) = @. (1 - albedo(model)) * model.Q
 	```
 	$(current_figure())
 	**Figure**: comparison between ASR used to force the ZeroDModel and the observed ASR (from [NCEP reanalysis](https://psl.noaa.gov/data/gridded/data.ncep.reanalysis.html))
 
-	It seems like we are quite off! In particular, the ASR seems to be lower on the poles, suggesting that the albedo is higher in those regions!
-
-	Let's find the value of ``\alpha`` which approximates best the observed radiation!
-	To do so we have to assume a functional form for ``\alpha``. A useful function to do this is
+	The ASR seems lower at the poles, suggesting that the albedo is higher in those regions. This is a result of the lower sun angle present at the poles but also, the higher presence of fresh snow, ice, and smooth open water- all areas prone to high levels of reflectivity
+	
+	``\alpha`` can be approximated with a function of ``\sin{\phi}`` that allows us to have the observed lower albedo at the poles and higher at the equator
 	```math
 	\alpha(\phi) = \alpha_0 + \frac{\alpha_1}{2}\left( 3\sin^2{\phi} - 1\right)
 	```
+	### Temperature-dependent emissivity
+
+	If the temperature rises, the saturation pressure rises, allowing more water vapor to remain in equilibrium in the gaseous form in the atmosphere. Since the emissivity is largely dependent on the water vapor content, a temperature rise causes an increase in the atmosphere's emissivity. You have seen in 2.2 that this _feedback_ effect can be modeled with a linear function of temperature:
+	```math
+	\varepsilon = \varepsilon_0 + \varepsilon_1 \log{\frac{\text{CO}_2}{{\text{CO}_2}_{\text{PRE}}}} + \varepsilon_2(T-T_{\text{PRE}})
+	```
+	Where the subscript ``\text{PRE}`` indicates pre-industrial values. Remember! The temperature in the above formula is the _surface_ temperature. 
+	To allow a temperature-dependent emissivity, we have to extend the ```emissivity``` method to ensure it can accept functions. We can define a function that accepts the model as an input and returns the temperature-dependent emissivity and use it as an input to our model
+	```
+	varε(model) = ε₀ + ε₁ * log2(440.0/280) + ε₂ * (model.Tₛ - 286.38)
+	```
+	We that have to dispatch the emissivity function to behave in a different way when the ε field of our ZeroDModel is a function	
+	```
+	emissivity(model::ZeroDModel{<:Any, <:Any, <:Function}) = model.ε(model)
+	```
+	Note! Physical values of emissivity range between 0 and 1!
 	"""
 end
 
-# ╔═╡ 816c0de5-1ad1-4084-bf1e-331760287e25
+# ╔═╡ f2510e0a-23f2-4a40-a7db-7b59898facfa
 begin
-	varα = 0.315 .+ 0.15 .* 0.5 .* (3. * sind.(ϕ).^2 .- 1)
-	model_var1 = ZeroDModel(α = varα)
+	# variable albedo
+	a₀ = 0.312
+	a₁ = 0.15 
+	varα = @. a₀ + a₁ .* 0.5 * (3 * sind(ϕ)^2 .- 1)
 
-	plot_latitudinal_variables!(ϕ, [ASR(model_feedback), ASR(model_var1), ASR_obs],
-								["ASR constant α", "ASR variable α", "observed ASR"],
-								[:red, :purple, :red], 
-								[:solid, :solid, :dashdot],
-								ylabel = "Absorbed Shortwave Radiation (ASR) [W/m²]")	
-	md""" 
-	## Variable albedo
-	$(current_figure())
-	"""
+	# variable emissivity (function that depends on the model state)
+	ε₀, ε₁, ε₂ = (0.75, 0.02, 0.005)
+	function varε(model) 
+		return @. min(max(ε₀ + ε₁ * log2(440.0/280) + ε₂ * (model.Tₛ - 286.38), 0), 1.0)
+	end
 end
 
 # ╔═╡ 4640a179-3373-4901-ac31-31022e8c7eb2
 begin
-	complete_model_0D = ZeroDModel(; ε = varε, α = varα, ϕ)
-	evolve_model!(complete_model_0D, Δt = 50, stop_year = 100)
+	feedback_model  = ZeroDModel(; ε = varε, α = varα, ϕ)
+	reference_model = ZeroDModel(; ε = 0.8, ϕ)
 
-	plot_latitudinal_variables!(ϕ, [model_lat.Tₛ .- 273, 
-									model_feedback.Tₛ .- 273,
-									complete_model_0D.Tₛ .- 273,
-									T_obs .- 273],
-									["radiative T",
-									 "ε feedback",
-									 "ε feedback and variable α",
-									 "observed T"],
-									[:red, :blue, :green, :black],
-								    [:solid, :solid, :solid, :dashdot],
-									ylims = (-70, 70))
+	evolve_model!(feedback_model,  Δt = 50, stop_year = 50)
+	evolve_model!(reference_model, Δt = 50, stop_year = 50);
+
+	α_obs = 1 .- ASR_obs ./ feedback_model.Q
+
+	fig_temp = plot_latitudinal_variables!(ϕ, [albedo(feedback_model), ϕ ./ ϕ .* 0.2985, α_obs],
+											  ["varα(model)", "α = 0.2985", "observed α"], 
+											  [:blue, :red, :black], 
+											  [:solid, :solid, :dashdot], ylabel = "albedo",
+											  ylims = (0.0, 0.8), 
+											  leg_pos = :ct, 
+											  res = (700, 600))
+	
+	fig_temp = plot_latitudinal_variables!(ϕ, [emissivity(feedback_model), ϕ ./ ϕ .* 0.75],
+											  ["varε(model)", "ε = 0.75"], 
+											  [:blue, :red], 
+											  [:solid, :dash], ylabel = "emissivity",
+											  fig = fig_temp, 
+											  ax_pos = [1, 2],
+											  ylims = (0.3, 1.0))
+	
+	fig_temp = plot_latitudinal_variables!(ϕ, [feedback_model.Tₛ .- 273.15,
+											   reference_model.Tₛ .- 273.15,
+											   T_obs .- 273],
+											  ["variable ε and α",
+											   "constant ε and α", 
+											   "observed T"], 
+											  [:blue, :red, :black, :purple], 
+											  [:solid, :solid, :dashdot, :dash], 
+											  ylims = (-70, 70),
+											  ax_pos = [2:2, 1:2], 
+											  fig = fig_temp)
 	
 	md"""
-	Let's take a look at our final latitudinal temperature model, complete of all bells and whistles
+	Let's take a look at our final latitudinal temperature model, complete with varying emissivity and albedo. 
 
 	$(current_figure())
+	**Figure**: comparison between observed temperature (dashed-dotted line), temperature calculated from a model with constant ``\varepsilon`` and ``\alpha`` (red) and from a model with latitude-dependent ``\alpha`` and water vapor feedback (blue)
 
-	What is the problem here?
+	**try it for yourself!** \
+	Add another atmospheric layer (as to have ``T_{a1}`` and ``T_{a2}``). \
+	How do the equations change? \
+	(Assume the two layers have emissivities ``\varepsilon_1`` and ``\varepsilon_2`` where ``\varepsilon_1 < \varepsilon_2``)
+
+	The prediction worsens when compared to the simple constant emissivity/constant albedo model. This is usually a sign that we are neglecting some important physical phenomenon.
 	"""
 end
 
 # ╔═╡ d13c319d-345a-40b8-b90d-b0b226225434
 begin
+	OLR_obs = jldopen(obs_rad_path)["OLR"]
+
 	OLR(model) = σ .* ((1 .- emissivity(model)) .* model.Tₛ.^4 + emissivity(model) .* model.Tₐ.^4)
 
-	evolve_model!(model_var1, Δt = 50, stop_year = 50)
-
-	plot_latitudinal_variables!(ϕ, [ASR_obs, ASR(model_var1), OLR_obs, OLR(model_var1)],
+	plot_latitudinal_variables!(ϕ, [ASR_obs, ASR(feedback_model), OLR_obs, OLR(feedback_model)],
 								["Observed ASR",
 								 "Modeled ASR",
 								 "Observed OLR",
@@ -1267,17 +1235,22 @@ begin
 	md"""
 	### Outgoing Longwave Radiation (OLR)
 	
-	We can look at the outgoing longwave radiation, which is the energy that the climate system loses to space in the form of infrared radiation. We can calculate it from our model as
-	
+	Outgoing longwave radiation is the energy that the earth loses to space in the form of radiative emission. It has a contribution from the atmosphere and a contribution from the emitted energy from the surface that manages to escape from the absorption of the atmosphere
 	```
 	OLR(model) = @. (1 - emissivity(model)) * σ * model.Tₛ^4 + emissivity(model) * σ * model.Tₐ^4
 	```
 
 	$(current_figure())
+	**Figure**: comparison between observed and calculated ASR and OLR
 
-	The OLR and ASR from our model match! (Is this expected?)
+	The OLR and ASR from our model match quite closely. This is expected: since every latitude in our model is independent the incoming energy (ASR) must match the outgoing energy (OLR) for energy conservation to hold. This is not the case for the observed profiles. We see that at the equator the incoming energy is larger than the emission and vice-versa happens at the poles. This is an indication that, in the real climate system, energy is transported from the equator to the poles. The mechanism that allows this heat transport is the presence of a global atmospheric circulation. 
 	"""
 end
+
+# ╔═╡ d1a741ad-f28d-48c7-9f15-d55d0801573d
+md"""
+# Temperature distribution with diffusion
+"""
 
 # ╔═╡ a046b625-b046-4ca0-adde-be5249a420f4
 md""" κ $(@bind κ_slider PlutoUI.Slider(0:0.01:1, show_value=true)) """
@@ -1290,19 +1263,14 @@ begin
 	
 	evolve_model!(model_1D, Δt = 50, stop_year = 50)
 	
-	tem_new2 = [temp_new[1], temp_new[5], ]
-	lab_new2 = [lab_new[1], lab_new[5], "diffused T"]
-	col_new2 = [col_new[1], col_new[5], :purple]
-	sty_new2 = [sty_new[1], sty_new[5], :solid]
-
-	DTκ0 = complete_model_0D.Tₛ[45] - complete_model_0D.Tₛ[end]
+	DTκ0 = feedback_model.Tₛ[45] - feedback_model.Tₛ[end]
 	DTκ1 = model_1D.Tₛ[45] - model_1D.Tₛ[end]
 	DTob = T_obs[45] - T_obs[end-6]
 
 	title = @sprintf("T(0ᵒ) - T(90ᵒ): %.2f (κ = 0), %.2f (κ = %.2f), %.2f (obs)", 
 					 DTκ0, DTκ1, κ_slider, DTob)
 	
-	plot_latitudinal_variables!(ϕ, [complete_model_0D.Tₛ .- 273, 
+	plot_latitudinal_variables!(ϕ, [feedback_model.Tₛ .- 273, 
 									model_1D.Tₛ .- 273,
 									T_obs .- 273], 
 									["model with κ = 0",
@@ -1315,59 +1283,74 @@ begin
 	current_figure()	
 end
 
+# ╔═╡ c98fcf26-d715-47c2-84ac-63bffe02d813
+md"""
+Is this a sensible diffusivity value? We know that heat transport is caused by atmospheric circulation, so what is a plausible value of the diffusivity caused by atmospheric motion? If we take into account the velocity of a typical atmospheric eddy ``V``, the order of magnitude of the flux is ``V \cdot T`` (where ``T`` is a temperature scale). We parameterize this with a term that looks like ``K \cdot T / L`` where ``K`` is our diffusivity expressed in m²/s and ``L`` is a typical length scale of movement in the atmosphere. Then it should hold that
+```math
+K \cdot T / L \sim V \cdot T 
+```
+If we fill in typical values for atmospheric velocity and length scales (about ``20`` m/s and ``2000`` km) we get that
+```math
+K \sim V\cdot L \sim 10^7 \ \ \text{m}^2/s
+```
+This diffusivity corresponds to a conductivity ``\kappa`` (in W/m²K) of
+```math
+\kappa \sim \frac{K C_a}{2\pi R^2} \approx 0.45 \ \ \text{W}/\text{m}^2\text{K}
+```
+"""
+
 # ╔═╡ 6534f98d-1270-4e7c-8ce8-66a6b1ee48f7
 begin	
+	HF = model_1D.κₛ .* explicit_diffusion(model_1D.Tₛ, deg2rad(2), model_1D.ϕᶠ, model_1D.ϕᶜ) 
+
 	plot_latitudinal_variables!(ϕ, [ASR(model_1D), 
-									ASR_obs, 
 									OLR(model_1D), 
-									OLR_obs], 
-									["modeled ASR", "Observed ASR",
-									 "modeled OLR", "Observed OLR"], 
-									[:red, :red, :blue, :blue, :green], 
+									HF], 
+									["ASR", "OLR", "transport"], 
+									[:red, :blue, :green], 
 									[:solid, :dash, :solid, :dash, :solid],
-									ylabel = "Energy Budget Wm⁻²")
+									ylabel = "Energy Budget Wm⁻²",
+									leg_pos = :cc)
 
 	
 	md"""
-	What will this do in terms of OLR and ASR?
-
-	And what about heat flux?
-
 	$(current_figure())
+	**Figure**: Energy budget for a climate with transport.
 	"""
 end
 
 # ╔═╡ 77a73a9d-9d78-4cf5-ae19-f1107fa5b4c2
 begin
-	HF = model_1D.κₛ .* explicit_diffusion(model_1D.Tₛ, deg2rad(2), model_1D.ϕᶠ, model_1D.ϕᶜ) 
-	
-	plot_latitudinal_variables!(ϕ, [HF], [""], [:blue], [:dash])
+
+	plot_latitudinal_variables!(ϕ, [HF], ["diffusion source/sink"], [:red], [:solid], leg_pos = :ct)
 
 	md"""
 	$(current_figure())
 
-	Let's calculate the integral
-	$(sum(HF .* cos.(model_1D.ϕᶜ) .* (model_1D.ϕᶠ[2:end] .- model_1D.ϕᶠ[1:end-1])))
-
+	
+	Heat flux can only redistribute energy. It is then important to check that our solution method does not create or destroy energy.
+	Let's compute the integral of the transport term in latitude
+	```math
+	\int_{-90^o}^{90^o} \mathcal{T} \cos{\phi} d\phi \approx \sum_{j = 1}^N \mathcal{T}_j \cos{\phi_j} \cdot (\phi_{j+1/2} - \phi_{j-1/2}) 
+	```
 	"""
-	
-	
 end
+
+# ╔═╡ 80c72898-139e-44af-bab0-ca638f282188
+sum(@. HF * cos(model_1D.ϕᶜ) * (model_1D.ϕᶠ[2:end] - model_1D.ϕᶠ[1:end-1]))
 
 # ╔═╡ b0ca64b8-0211-4d1c-b007-7583bf8ac908
 md"""
-## Stability with diffusion
+## Stability of a diffusive model
 
-Let's, once again, reduce the two equations to a more simple, 1D partial diffential equation, which only has a diffusion term
-
-You can imagine that greenhouse gasses are immediately expelled from the atmosphere, then the atmosphere stops absorbing heat from the surface and emitting it in space. The remaining heat then will only redistribute via transport along the atmosphere.
+Let's, once again, reduce the two equations to a more simple, 1D partial differential equation, which only has a diffusion term. You can imagine that greenhouse gases are immediately removed from the atmosphere. As a result, the atmosphere stops absorbing heat from the surface and emitting it in space. The remaining heat then will only redistribute via transport along the atmosphere. (we also simplify the earth to be "flat", i.e., no cosines)
 
 ```math
-C \frac{\partial T}{\partial t} = K \frac{\partial^2 T}{\partial x^2}
+\frac{\partial T}{\partial t} = K \frac{\partial^2 T}{\partial x^2}
 ```
-
+where ``K`` is the diffusivity in m²/s
 ```math
-C \frac{T^{(n+1)}_j - T^{(n)}_j}{\Delta t} = K \frac{T^{(n)}_{j+1} - 2T^{(n)}_j+ T^{(n)}_j}{\Delta x^2}
+\frac{T^{(n+1)}_j - T^{(n)}_j}{\Delta t} = K \frac{T^{(n)}_{j+1} - 2T^{(n)}_j+ T^{(n)}_j}{\Delta x^2}
 ```
 
 Imagine the initial temperature profile can be approximated by a spatial wave of wavenumber ``k``, i.e,
@@ -1377,34 +1360,32 @@ T^{(n)}_j = \xi^{(n)}e^{ikx_j} \ , \ \ \ \ \text{where} \ \ \ \ x_j = j\Delta x
 
 Let's substitute in the following equation and divide by ``\xi^{(n)}e^{ikj\Delta x}``
 ```math
-\frac{C}{\Delta t} \left( \frac{\xi^{(n+1)}}{\xi^{(n)}} - 1\right) = K \frac{e^{ik \Delta x} - 2 + e^{- ik \Delta x}}{\Delta x^2}
+\left( \frac{\xi^{(n+1)}}{\xi^{(n)}} - 1\right) = K\Delta t \frac{e^{ik \Delta x} - 2 + e^{- ik \Delta x}}{\Delta x^2}
 ```
 
 we can use ``e^{i\theta} + e^{-i\theta} = 2\cos{\theta}`` and we get
 ```math
-\frac{\xi^{(n+1)}}{\xi^{(n)}} = 1 +\frac{K \Delta t}{C\Delta x^2} \underbrace{\left( 2\cos{k\Delta x} - 2\right)}_{\text{between \ } -4 \text{ \ and \ } 0}
+\frac{\xi^{(n+1)}}{\xi^{(n)}} = 1 +\frac{K \Delta t}{\Delta x^2} \underbrace{\left( 2\cos{k\Delta x} - 2\right)}_{\text{between \ } -4 \text{ \ and \ } 0}
 ```
 
 The worst-case scenario occurs for wavenumbers ``k`` which give 
 ```math
-\frac{\xi^{(n+1)}}{\xi^{(n)}} = 1 - 4\frac{K \Delta t}{C\Delta x^2} 
+\frac{\xi^{(n+1)}}{\xi^{(n)}} = 1 - 4\frac{K \Delta t}{\Delta x^2} 
 ```
 again, we want the amplitude to remain positively correlated (otherwise it means that heat transfers from cold to hot temperatures), so we must ensure that 
 ```math
-\Delta t < \frac{C\Delta x^2}{4K}
+\Delta t < \frac{\Delta x^2}{4K}
 ```
 In the previous case, we had that at temperatures which were reasonable for the atmosphere, the limitation was in the tenth of days... \
-With diffusion (a reasonable parameter as we see is around 0.5) which means that K (in m²s⁻¹) is
+We already saw that a reasonable diffusivity (in m²/s) for the atmosphere is 
 ```math
-\frac{K}{C} = \frac{2\pi R^2 κ}{sec/day}\cdot \frac{1}{C} ≈ \frac{2 \pi \left(6\cdot 10^6\right)^2 \cdot 0.5}{86400} \cdot \frac{1}{115} \approx 1 \cdot 10^7
+K \approx 10^7 \ \ \text{m}^2/\text{s}
 ```
-If we have a model with a two-degree resolution (90 points), then ``\Delta x \approx 200`` km, which means that the condition on the time step is
+If we have a model with a two-degree resolution (90 points), then ``\Delta x = R \Delta \phi \approx 200`` km, which means that the condition on the time step is
 ```math
-\Delta t < \frac{4\cdot 10^{10}}{4 \cdot 10^7}  = 1000 s
+\Delta t < \frac{(2\cdot 10^{5})^2}{4 \cdot 10^7}  = 1000 s
 ```
-which is smaller than an hour!
-
-We introduced another limitation in our explicit time stepping. The time step is connected with the spatial resolution of our model. This limitation is called CFL condition (Courant–Friedrichs–Lewy condition) and ensures that the temperature does not move more than one spatial grid cell in one time step
+We introduced another limitation in our explicit time stepping. The time step is connected with the spatial resolution of our model. This limitation is called CFL condition (Courant–Friedrichs–Lewy condition) and ensures that the temperature does not move more than one spatial grid cell in one-time step. 
 
 **do it by yourself** \
 Demonstrate that implicit time stepping does not have the same limitations
@@ -1429,7 +1410,6 @@ begin
 	start_model.Tₐ .= model_1D.Tₐ
 
 	evolve_model!(start_model, Δt = 50, stop_year = 150)
-	plot_latitudinal_variables!(ϕ, [tem_new2..., start_model.Tₛ .- 273.15], [lab_new2..., "feedback α"], [col_new2..., :green], [sty_new2..., :solid])
 
 
 	model_2 = OneDModel(ImplicitTimeStep(), length(F); κ, ε = varε, α = α_model, Q = F)
@@ -1438,7 +1418,7 @@ begin
 	model_2.Tₐ .= start_model.Tₐ
 
 	evolve_model!(model_2, Δt = 50, stop_year = 150)
-	plot_latitudinal_variables!(ϕ, [complete_model_0D.Tₛ .- 273, 
+	plot_latitudinal_variables!(ϕ, [feedback_model.Tₛ .- 273, 
 									model_1D.Tₛ .- 273,
 									model_2.Tₛ .- 273,
 									T_obs .- 273], 
@@ -2877,12 +2857,12 @@ version = "3.5.0+0"
 # ╟─eb95e773-b12a-40a4-a4f1-9dced86fc8a2
 # ╟─75cacd05-c9f8-44ba-a0ce-8cde93fc8b85
 # ╠═18ddf155-f9bc-4e5b-97dc-762fa83c9931
-# ╟─87fdc7c2-536e-4aa1-9f68-8aec4bc7069d
+# ╠═87fdc7c2-536e-4aa1-9f68-8aec4bc7069d
 # ╟─8d4d8b93-ebfe-41ff-8b9e-f8931a9e83c2
 # ╟─25223f7b-22f7-46c2-9270-4430eb6c186e
 # ╟─034fc483-b188-4b2a-891a-61b76c74072d
 # ╠═039ec632-d238-4e63-81fc-a3225ccd2aee
-# ╠═5d31e2a8-e357-4479-bc48-de1a1b8bc4d4
+# ╟─5d31e2a8-e357-4479-bc48-de1a1b8bc4d4
 # ╟─724901e9-a19a-4d5f-aa6a-79ec0f230f24
 # ╠═1431b11f-7838-41da-92e3-bcca9f4215b3
 # ╠═de5d415f-8216-473d-8e0b-a73139540e1e
@@ -2897,40 +2877,45 @@ version = "3.5.0+0"
 # ╟─b85fdf41-ef8f-4314-bc3c-383947b9f02c
 # ╟─00776863-2260-48a8-83c1-3f2696f11d96
 # ╟─16ca594c-c9db-4528-aa65-bab12cb6e22a
-# ╟─6b770afa-bf99-49eb-9489-367d9de58780
+# ╟─ea517bbf-eb14-4d72-a4f4-9bb823e02f88
 # ╠═fd14e483-94a4-4a8b-8ca5-0eb24d487e4a
 # ╟─140bcdac-4145-47b3-952f-bfe50f6ed41c
+# ╟─849775fa-4990-47d3-afe0-d0a049bb90af
 # ╠═4d517df8-0496-40a2-8e44-5beda6cd7226
+# ╟─b5d7b8b7-b797-4157-a814-1df2b3a8d2aa
+# ╠═0331aa02-a0a0-4f4f-b3cc-b7ced5357edc
 # ╟─6932b969-0760-4f09-935a-478ac56de262
-# ╟─1d8a69b7-52db-4865-8bf2-712c2b6442f5
+# ╠═1d8a69b7-52db-4865-8bf2-712c2b6442f5
 # ╟─5884999f-f136-4ae7-8831-cc3a36f50a98
-# ╟─fa7d8bbd-c023-4d94-a78a-d3b3223b023f
-# ╟─69acab94-5daf-4a24-9075-98126fadc166
-# ╟─1a4d9e1b-a8b3-40ec-b4d9-84caa7d43a1d
-# ╠═816c0de5-1ad1-4084-bf1e-331760287e25
+# ╠═f2510e0a-23f2-4a40-a7db-7b59898facfa
+# ╠═6ce47d90-d5a2-43c0-ad64-27c13aa0f5db
 # ╟─4640a179-3373-4901-ac31-31022e8c7eb2
 # ╟─d13c319d-345a-40b8-b90d-b0b226225434
+# ╠═8f21fc70-e369-4938-b0c2-5a4fbae71713
 # ╟─901548f8-a6c9-48f8-9c8f-887500081316
-# ╠═8f963bc5-1900-426d-ba1f-078ed45b48d3
 # ╟─567fa8d3-35b4-40d7-8404-ae78d2874380
 # ╟─0d8fffdc-a9f5-4d82-84ec-0f27acc04c21
 # ╠═930935f8-832a-45b4-8e5e-b194afa917c6
+# ╠═abdbbcaa-3a76-4a47-824d-6da73bc71c31
 # ╟─1cef338d-5c4a-4ea5-98d7-9ac4f11922f3
 # ╠═71cff056-a36c-4fd4-babb-53018894ac5c
 # ╟─83be4f9d-6c85-4e5b-9379-00618c9e39be
 # ╠═7c7439f0-d678-4b68-a5e5-bee650fa17e2
 # ╟─57dde8ad-f7de-4ca6-bfab-235bc13131c0
 # ╠═9a5ac384-f5e6-41b0-8bc4-44e2ed6be472
+# ╟─d1a741ad-f28d-48c7-9f15-d55d0801573d
 # ╟─a046b625-b046-4ca0-adde-be5249a420f4
-# ╟─514ee86b-0aeb-42cd-b4cd-a795ed23b3de
+# ╠═514ee86b-0aeb-42cd-b4cd-a795ed23b3de
+# ╟─c98fcf26-d715-47c2-84ac-63bffe02d813
 # ╟─6534f98d-1270-4e7c-8ce8-66a6b1ee48f7
-# ╠═77a73a9d-9d78-4cf5-ae19-f1107fa5b4c2
-# ╠═b0ca64b8-0211-4d1c-b007-7583bf8ac908
+# ╟─77a73a9d-9d78-4cf5-ae19-f1107fa5b4c2
+# ╠═80c72898-139e-44af-bab0-ca638f282188
+# ╟─b0ca64b8-0211-4d1c-b007-7583bf8ac908
 # ╟─51f3fd00-508b-4b42-bd95-ae19cb19b4db
 # ╟─65dedef2-03e5-4e0f-8022-53168952e7a8
 # ╟─ebcf224f-c006-4098-abf0-5c3644e2ee97
 # ╟─1c33dc21-04af-4139-9061-696db73c3249
-# ╠═b768707a-5077-4662-bcd1-6d38b3e4f929
-# ╠═419c8c31-6408-489a-a50e-af712cf20b7e
+# ╟─b768707a-5077-4662-bcd1-6d38b3e4f929
+# ╟─419c8c31-6408-489a-a50e-af712cf20b7e
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
