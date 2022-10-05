@@ -265,7 +265,7 @@ begin
 	$(current_figure())
 	**Figure**: Annual mean insolation
 	
-	We can see that the average insolation is much lower (~2.5X) at the poles compared to the equator! This is 	reassuring since the poles are colder than the equator!
+	We can see that the average insolation is much lower (~2.5X) at the poles compared to the equator! This is reassuring given the climate we experience!
 	
 	"""
 end
@@ -275,8 +275,8 @@ end
 md"""
 ## Solving the climate system: equilibrium solution
 
-Let us recall the system of ODE we defined that governs the surface and atmospheric temperature. \
-The forcing will now be latitude-dependent, giving a latitude-dependent temperature
+Let us recall the system of ODE that governs the surface and atmospheric temperature. \
+The forcing is now be latitude-dependent, resulting in a latitude-dependent temperature
 
 ```math
 \begin{align}
@@ -284,8 +284,8 @@ C_a \frac{d T_a}{dt} & = \varepsilon \sigma T_s ^4 - 2\varepsilon \sigma T_a^4 \
 C_s \frac{d T_s}{dt} & = \varepsilon \sigma T_a^4 - \sigma T_s ^4 + (1 - \alpha)  Q(\phi)
 \end{align}
 ```
-Here ``T_s`` is the surface (or ocean) temperature, ``T_a`` is the atmospheric temperature, ``\varepsilon`` in the emissivity of the atmosphere, ``\alpha`` is the earth's albedo and ``C_s`` and ``C_a`` are the heat capacities of the surface and atmosphere, respectively. ``Q(\phi)`` is the yearly averaged latitudinal insolation.  The system is at equilibrium when all the derivatives in time are zero \
-(i.e the system does not evolve in time anymore)
+Here ``T_s`` is the surface (or ocean) temperature, ``T_a`` is the atmospheric temperature, ``\varepsilon`` in the emissivity of the atmosphere, ``\alpha`` is the earth's albedo and ``C_s`` and ``C_a`` are the heat capacities of the surface and atmosphere, respectively. ``Q(\phi)`` is the yearly averaged latitudinal insolation.  When the system reaches equilibrium it stops evolving in time \
+(i.e the ``dT/dt = 0``)
 ```math
 \begin{align}
 & \varepsilon \sigma T_{E,s}^4 - 2\varepsilon \sigma T_{E,a}^4 = 0 \\
@@ -314,15 +314,15 @@ Let's see how to do this with two different methods:
 
 We first assume that the time derivative can be written simply as
 ```math
-\frac{d T}{dt} = \frac{T^{(n+1)} - T^{(n)}}{\Delta t}
+\frac{d T}{dt} \approx \frac{T^{(n+1)} - T^{(n)}}{t^{(n+1)} - t^{(n)}}
 ```
-where the ``n`` superscript stands for the time instant ``t(n)`` and ``n+1`` is ``t(n+1) = t(n) + \Delta t``
+where the ``n`` superscript stands for the time instant and the time step ``\Delta t`` is defined as ``\Delta t = t^{(n+1)} - t^{(n)}``
 
 Now we can rewrite the equations as
 ```math 
 \begin{align}
-C_a T_a^{(n+1)} & = C_a T_a^{(n)} + \Delta t G_a \\
-C_s T_s^{(n+1)} & = C_s T_s^{(n)} + \Delta t G_s 
+C_a \frac{T_a^{(n+1)} -  T_a^{(n)}}{\Delta t} & = G_a \\
+C_s \frac{T_s^{(n+1)} -  T_s^{(n)}}{\Delta t} & = G_s 
 \end{align}
 ```
 where ``G`` are the _tendency terms_ defined as
@@ -348,8 +348,8 @@ T_a^{(n+1)} & = T_a^{(n)} + \frac{\Delta t}{C_a} G_a^{(n)} \\
 T_s^{(n+1)} & = T_s^{(n)} + \frac{\Delta t}{C_s} G_s^{(n)} 
 \end{align}
 ```
-It is called _explicit_ because the values of ``G_a^{(n)}`` and ``G_s^{(n)}`` are readily available and the update rule for the time step ``n+1`` is explicit.
-Explicit time stepping is fast and simple to implement, but, as we will see later it has some shortcomings when time stepping with large ``\Delta t`` is required
+It is called _explicit time stepping_ because the values of ``G_a^{(n)}`` and ``G_s^{(n)}`` are readily available and the update rule for the time step ``n+1`` is explicitly dependent on time step ``n``.
+Explicit time stepping is fast and simple to implement, but it has some shortcomings when time stepping with large ``\Delta t``
 
 #### Implicit time stepping
 
@@ -362,11 +362,9 @@ G_a^{(n+1)} & = \varepsilon \sigma \left(T_s^{(n+1)}\right) ^4 - 2\varepsilon \s
 G_s^{(n+1)} & = \varepsilon \sigma \left(T_a^{(n+1)}\right)^4 - \sigma \left(T_s^{(n+1)}\right)^4 + F
 \end{align}
 ```
-Those fourth powers are a little bit annoying... \
-Let's simplify them a bit! \
-Let's assume that temperature does not change significantly in one time step \
-``T^{(n+1)} - T^{(n)} \ll T^{(n)}`` \
-we can then linearize the fourth power of temperature
+We would like to express the ODEs as a linear system, but these equations are non-linear. \
+Fortunately, if we assume that the temperature does not change significantly in one-time step \
+``T^{(n+1)} - T^{(n)} \ll T^{(n)}`` we can linearize ``\left(T^{(n+1)}\right)^4`` as
 ```math
 \left(T^{(n+1)}\right)^4 \approx \left(T^{(n)}\right)^3 T^{(n+1)}
 ```
@@ -777,8 +775,8 @@ Our governing system of equation is now a system of PDE, so we have to solve the
 
 ```math
 \begin{align}
-C_a \frac{dT_a}{dt} & = \sigma T_s^4 - 2\varepsilon \sigma T_a^4 + \frac{\kappa}{\cos{\phi}} \frac{\partial}{\partial \phi} \left(\cos{\phi}  \frac{\partial T_a}{\partial \phi} \right)\\
-C_s \frac{dT_s}{dt} & = - \sigma T_s^4 + \varepsilon \sigma T_a^4 + (1 - \alpha) Q + \frac{\kappa}{\cos{\phi}} \frac{\partial}{\partial \phi} \left(\cos{\phi}  \frac{\partial T_s}{\partial \phi} \right)
+C_a \frac{\partial T_a}{\partial t} & = \sigma T_s^4 - 2\varepsilon \sigma T_a^4 + \frac{\kappa}{\cos{\phi}} \frac{\partial}{\partial \phi} \left(\cos{\phi}  \frac{\partial T_a}{\partial \phi} \right)\\
+C_s \frac{\partial T_s}{\partial t} & = - \sigma T_s^4 + \varepsilon \sigma T_a^4 + (1 - \alpha) Q + \frac{\kappa}{\cos{\phi}} \frac{\partial}{\partial \phi} \left(\cos{\phi}  \frac{\partial T_s}{\partial \phi} \right)
 \end{align}
 ```
 
@@ -2884,7 +2882,7 @@ version = "3.5.0+0"
 # ╟─25223f7b-22f7-46c2-9270-4430eb6c186e
 # ╟─034fc483-b188-4b2a-891a-61b76c74072d
 # ╠═039ec632-d238-4e63-81fc-a3225ccd2aee
-# ╟─5d31e2a8-e357-4479-bc48-de1a1b8bc4d4
+# ╠═5d31e2a8-e357-4479-bc48-de1a1b8bc4d4
 # ╟─724901e9-a19a-4d5f-aa6a-79ec0f230f24
 # ╠═1431b11f-7838-41da-92e3-bcca9f4215b3
 # ╠═de5d415f-8216-473d-8e0b-a73139540e1e
