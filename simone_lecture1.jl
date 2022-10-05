@@ -360,8 +360,7 @@ G_s^{(n+1)} & = \varepsilon \sigma \left(T_a^{(n+1)}\right)^4 - \sigma \left(T_s
 \end{align}
 ```
 We would like to express the ODEs as a linear system, but these equations are non-linear. \
-Fortunately, if we assume that the temperature does not change significantly in one-time step \
-``T^{(n+1)} - T^{(n)} \ll T^{(n)}`` we can linearize ``\left(T^{(n+1)}\right)^4`` as
+Fortunately, if we assume that the temperature does not change significantly in one-time step (``T^{(n+1)} - T^{(n)} \ll T^{(n)}``) we can linearize ``\left(T^{(n+1)}\right)^4`` as
 ```math
 \left(T^{(n+1)}\right)^4 \approx \left(T^{(n)}\right)^3 T^{(n+1)}
 ```
@@ -615,6 +614,34 @@ md"""
 # Predicting earth's temperature distribution
 """
 
+# ╔═╡ b65e2af0-9a08-4915-834b-1a20b2440891
+md"""
+Let's define some utility functions: 
+- a function that evolves our model in time
+- a function that plots the results as a function of ϕ
+"""
+
+# ╔═╡ 91dec8b7-a9da-4c62-973e-2fd8e0a92e58
+function plot_latitudinal_variables!(ϕ, vars, labels, colors, styles; 
+									 ylabel  = "Temperature [ᵒC]", 
+									 ylims   = nothing, 
+									 title   = "", 
+									 leg_pos = :cb,
+									 ax_pos  = [1, 1],
+									 res     = (700, 350),
+									 fig     = Figure(resolution = res))
+
+	axis = Axis(fig[ax_pos...]; title, ylabel, xlabel = "latitude [ᵒN]")	
+	colors = 
+	for (var, label, color, linestyle) in zip(vars, labels, colors, styles)
+		lines!(axis, ϕ, var; linestyle, label, color)
+	end
+	axislegend(axis, position = leg_pos, framevisible = false)
+	!isnothing(ylims) && ylims!(axis, ylims)
+	
+	return fig
+end
+
 # ╔═╡ 140bcdac-4145-47b3-952f-bfe50f6ed41c
 md"""
 $(Resource("https://www.researchgate.net/profile/Anders-Levermann/publication/274494740/figure/fig9/AS:668865801506834@1536481442913/a-Surface-air-temperature-as-a-function-of-latitude-for-land-dashed-line-corrected.png", :height => 400))
@@ -652,42 +679,6 @@ begin
 	T_obs = jldopen(obs_temp_path)["T"]
 end
 
-# ╔═╡ b5d7b8b7-b797-4157-a814-1df2b3a8d2aa
-md"""
-##### Usefull plotting function
-to plot variables as a function of ``\phi``
-"""
-
-# ╔═╡ 0331aa02-a0a0-4f4f-b3cc-b7ced5357edc
-# Function for plotting variables vars of size `length(ϕ)` vs ϕ
-function plot_latitudinal_variables!(ϕ, vars, labels, colors, styles; 
-									 ylabel  = "Temperature [ᵒC]", 
-									 ylims   = nothing, 
-									 title   = nothing, 
-									 leg_pos = :cb,
-									 ax_pos  = [1, 1],
-									 fig     = nothing,
-									 res     = (700, 350))
-	if isnothing(fig)
-		fig = Figure(; resolution = res)
-	end
-	if !isnothing(title)
-		axis = Axis(fig[ax_pos...]; title, ylabel, xlabel = "latitude [ᵒN]")	
-	else
-		axis = Axis(fig[ax_pos...]; ylabel, xlabel = "latitude [ᵒN]")	
-	end
-	colors = 
-	for (var, label, color, linestyle) in zip(vars, labels, colors, styles)
-		lines!(axis, ϕ, var; linestyle, label, color)
-	end
-	axislegend(axis, position = leg_pos, framevisible = false)
-	if !isnothing(ylims)
-		ylims!(axis, ylims)
-	end
-
-	return fig
-end
-
 # ╔═╡ 6932b969-0760-4f09-935a-478ac56de262
 md""" ε $(@bind ε PlutoUI.Slider(0:0.01:1, show_value=true, default = 0.0)) """
 
@@ -699,9 +690,26 @@ emissivity(model::ZeroDModel{<:Any, <:Any, <:Function}) = model.ε(model)
 md"""
 ### Global atmospheric circulation
 
-There are two main factors that we have to take into account when considering large scale atmospheric circulation:
+There are three main factors that we have to take into account when considering large scale atmospheric circulation:
 - hot air rises
 - cold air sinks
+- Coriolis force pushes winds to the right in the upper hemisphere and to the left in the lower hemisphere
+
+Hot air in the equator rises upwards and moves towards the pole. It cools down in the process and about 30ᵒ it starts to sink creating large circulation cells called Hadley cells. At the poles, cold dense air tends to sink and move down towards the equator, creating the Polar pressure cells. While moving toward the equator, the air coming from the pole encounters faster spinning latitudes and is, therefore, diverted by the Coriolis effect. In between these two major cells, we form strong winds which are diverted towards the east (westerlies)
+
+$(Resource("https://tdgil.com/wp-content/uploads/2020/04/Hadley-Cells-and-Wind-Directions.jpg", :height => 500))
+**Figure**: schematic depicting the global atmospheric circulation
+
+To solve global circulation, we need to solve a complex system of partial differential equations on the sphere. These equations are named Navier-Stokes equations after the physicists that developed them and ensure the conservation of mass, momentum, and energy.
+```math
+\begin{align}
+ & \frac{\partial\boldsymbol{\rho u}}{\partial t} + \boldsymbol{\nabla} \cdot (\rho \boldsymbol{u} \otimes \boldsymbol{u}) + f\widehat{\boldsymbol{z}} \times \boldsymbol{u} = - \boldsymbol{\nabla} p + \rho \boldsymbol{g} + \nabla \cdot \boldsymbol{\tau} \\
+& \frac{\partial \rho e}{\partial t} + \boldsymbol{\nabla}\cdot (\boldsymbol{u} (e - p)) =  \boldsymbol{\nabla} \cdot (\kappa \boldsymbol{\nabla} T) \\
+& \frac{\partial \rho}{\partial t} + \boldsymbol{\nabla} \cdot (\rho \boldsymbol{u}) = 0 \\
+\end{align}
+```
+complemented by an equation of state (usually ideal gas) in the form ``p = EOS(\rho, e)``
+
 """
 
 # ╔═╡ 901548f8-a6c9-48f8-9c8f-887500081316
@@ -711,7 +719,7 @@ md"""
 
 # ╔═╡ 567fa8d3-35b4-40d7-8404-ae78d2874380
 md"""
-## Modeling longitudinal transport
+## Modeling latitudinal transport
 what do we have to add to our model to include atmospheric circulation?
 
 ```math
@@ -1069,8 +1077,7 @@ begin
 	current_figure()
 end
 
-# ╔═╡ fd14e483-94a4-4a8b-8ca5-0eb24d487e4a
-# Function that evolves our model till `stop_year` with a time step of `Δt`
+# ╔═╡ dfde2f6a-f612-4013-8d42-5590221167c9
 function evolve_model!(model; Δt = 30.0, stop_year = 40)
 	stop_iteration = Int(stop_year * 365 ÷ Δt)
 	@inbounds for iter in 1:stop_iteration
@@ -1301,11 +1308,13 @@ This diffusivity corresponds to a conductivity ``\kappa`` (in W/m²K) of
 
 # ╔═╡ 6534f98d-1270-4e7c-8ce8-66a6b1ee48f7
 begin	
-	HF = model_1D.κₛ .* explicit_diffusion(model_1D.Tₛ, deg2rad(2), model_1D.ϕᶠ, model_1D.ϕᶜ) 
+
+	
+	HF(model) = model.κₛ .* explicit_diffusion(model.Tₛ, deg2rad(2), model.ϕᶠ, model.ϕᶜ) 
 
 	plot_latitudinal_variables!(ϕ, [ASR(model_1D), 
 									OLR(model_1D), 
-									HF], 
+									HF(model_1D)], 
 									["ASR", "OLR", "transport"], 
 									[:red, :blue, :green], 
 									[:solid, :dash, :solid, :dash, :solid],
@@ -1322,7 +1331,7 @@ end
 # ╔═╡ 77a73a9d-9d78-4cf5-ae19-f1107fa5b4c2
 begin
 
-	plot_latitudinal_variables!(ϕ, [HF], ["diffusion source/sink"], [:red], [:solid], leg_pos = :ct)
+	plot_latitudinal_variables!(ϕ, [HF(model_1D)], ["diffusion source/sink"], [:red], [:solid], leg_pos = :ct)
 
 	md"""
 	$(current_figure())
@@ -1333,11 +1342,12 @@ begin
 	```math
 	\int_{-90^o}^{90^o} \mathcal{T} \cos{\phi} d\phi \approx \sum_{j = 1}^N \mathcal{T}_j \cos{\phi_j} \cdot (\phi_{j+1/2} - \phi_{j-1/2}) 
 	```
+	This is a good sanity check to make sure that our model is doing what is intended
 	"""
 end
 
 # ╔═╡ 80c72898-139e-44af-bab0-ca638f282188
-sum(@. HF * cos(model_1D.ϕᶜ) * (model_1D.ϕᶠ[2:end] - model_1D.ϕᶠ[1:end-1]))
+sum(HF(model_1D) .* cos.(model_1D.ϕᶜ) .* (model_1D.ϕᶠ[2:end] .- model_1D.ϕᶠ[1:end-1]))
 
 # ╔═╡ b0ca64b8-0211-4d1c-b007-7583bf8ac908
 md"""
@@ -1393,34 +1403,32 @@ Demonstrate that implicit time stepping does not have the same limitations
 
 # ╔═╡ 51f3fd00-508b-4b42-bd95-ae19cb19b4db
 md"""
-## Snowball earth
+## Ice-albedo feedback and the Snowball earth
+
+The albedo of Earth's surface varies from about 0.1 for the oceans to 0.6–0.9 for ice and clouds — meaning that clouds, snow, and ice are good radiation reflectors while liquid water is not. 
+We can build this process in our model by imagining the earth covered by ice when we lower the temperature below a certain threshold ``T_{ice}``
+
+```math
+\alpha(\phi, T) = \begin{cases} \alpha(\phi) & \ \ \text{if} \ \ T > T_{ice} \\ \alpha_{ice} &  \ \ \text{if} \ \ T \le T_{ice} \end{cases} 
+```
+where ``\alpha(\phi)`` is our previously defined array `varα`, ``T_{ice} = -10`` ``^\circ``C and ``\alpha_{ice} = 0.7``
 """
 
 # ╔═╡ 65dedef2-03e5-4e0f-8022-53168952e7a8
 begin 	
-	α_feedback(T, α) = T > 273.15 - 10.0 ? α : 0.62
+	α_feedback(T, α) = T > 273.15 - 10.0 ? α : 0.7
 	κ = 0.5
 	α_model(model) = α_feedback.(model.Tₛ, varα)
-	
-	ice_line(model::OneDModel) = model.ϕᶠ[searchsortedlast(model.Tₛ, 273.15 - 10.0)]
 
-	start_model = OneDModel(ImplicitTimeStep(), length(F); κ, ε = varε, α = α_model, Q = F)
+	current_climate_model = OneDModel(ImplicitTimeStep(), length(F); κ, ε = varε, α = α_model, Q = F)
 
-	start_model.Tₛ .= model_1D.Tₛ
-	start_model.Tₐ .= model_1D.Tₐ
+	current_climate_model.Tₛ .= model_1D.Tₛ
+	current_climate_model.Tₐ .= model_1D.Tₐ
 
-	evolve_model!(start_model, Δt = 50, stop_year = 150)
-
-
-	model_2 = OneDModel(ImplicitTimeStep(), length(F); κ, ε = varε, α = α_model, Q = F)
-
-	model_2.Tₛ .= start_model.Tₛ
-	model_2.Tₐ .= start_model.Tₐ
-
-	evolve_model!(model_2, Δt = 50, stop_year = 150)
+	evolve_model!(current_climate_model, Δt = 50, stop_year = 150)
 	plot_latitudinal_variables!(ϕ, [feedback_model.Tₛ .- 273, 
 									model_1D.Tₛ .- 273,
-									model_2.Tₛ .- 273,
+									current_climate_model.Tₛ .- 273,
 									T_obs .- 273], 
 									["model with κ = 0",
 									 "model with κ = $κ_slider",
@@ -1434,30 +1442,91 @@ begin
 	current_figure()
 end
 
+# ╔═╡ 8afe64e3-d19a-4801-b7b8-56d886f7a59a
+plot_latitudinal_variables!(ϕ, [ASR(current_climate_model), 
+								OLR(current_climate_model), 
+								HF(current_climate_model)], 
+								["ASR", "OLR", "transport"], 
+								[:red, :blue, :green], 
+								[:solid, :solid, :solid],
+								ylabel = "Energy Budget Wm⁻²",
+								leg_pos = :cc)
+
 # ╔═╡ ebcf224f-c006-4098-abf0-5c3644e2ee97
 md"""
-Let's look at the various rhs terms in the surface temperature equation
+There will be a latitude where ``T_{\phi} = T_{ice}`` above which the earth will be covered in ice. We call this latitude ice line.
+Let's define an **ice_line** function retreives this latitude
 """
+
+# ╔═╡ 73238f6c-b8d3-4f92-bdfe-1c657e239903
+function ice_line(model)
+	idx = searchsortedlast(model.Tₛ, 273.15 - 10)
+
+	return idx == 0 ? 90.0 : idx > length(model.ϕᶜ) ? 0.0 :  - rad2deg(model.ϕᶜ[idx])
+end
+
+# ╔═╡ 247b4c3a-2777-47ed-8cc9-e90a5cdb640b
+"the ice line of our model is at $(ice_line(current_climate_model)) ᵒN"
+
+# ╔═╡ 0353c906-55d9-4419-a55d-8fcd374004d7
+begin
+	function calc_different_climates(initial_condition_model; forcing)
+		ice_line_model = zeros(length(forcing))
+		for (idx, S₀) in enumerate(forcing)
+			F₂ = annual_mean_insolation.(ϕ; S₀)
+			model_tmp = OneDModel(ImplicitTimeStep(), length(F₂); κ, ε = varε, α = α_model, Q = F₂)
+	
+			model_tmp.Tₛ .= initial_condition_model.Tₛ
+			model_tmp.Tₐ .= initial_condition_model.Tₐ
+	
+			evolve_model!(model_tmp, Δt = 100, stop_year = 100)
+	
+			ice_line_model[idx] = ice_line(model_tmp)
+		end
+		return ice_line_model
+	end
+end
 
 # ╔═╡ 1c33dc21-04af-4139-9061-696db73c3249
 begin 
-	S₀₁ = range(1300.0, 1450, length = 100)
-	ice_line_model = zeros(100)
-	for (idx, S₀) in enumerate(S₀₁[1])
-		F₂ = annual_mean_insolation.(ϕ; S₀)
-		model_tmp = OneDModel(ImplicitTimeStep(), length(F₂); κ, κₛ = κ, ε = varε, α = α_model, Q = F₂)
+	S₀₁ = range(1200.0, 1450, length = 25)
+	ice_line_current = calc_different_climates(current_climate_model, forcing = S₀₁)
 
-		model_tmp.Tₛ .= start_model.Tₛ
-		model_tmp.Tₐ .= start_model.Tₐ
-
-		evolve_model!(model_tmp, Δt = 50, stop_year = 150)
-
-		evolve_model!(model_tmp, Δt = 50, stop_year = 150)
-		ice_line_model[idx] = ice_line(model_tmp)
-	end
+	figure_ice = Figure(resolution = (500, 300))
 	
-	lines(S₀₁, ice_line_model)
+	ax_ice = Axis(figure_ice[1, 1], title = "ice line", ylabel = "ϕ [ᵒN]", xlabel = "forcing S₀ [W/m²]")
+	lines!(ax_ice, S₀₁, ice_line_current, label = "initial condition: current climate")
 	current_figure()
+end
+
+# ╔═╡ 70713834-3246-45a4-a4c8-68513bb853ce
+md"""
+Let's start from another initial condition
+
+"""
+
+# ╔═╡ 2b33a8a1-3772-4fb3-a914-a20a7aae91bc
+begin
+	low_F = annual_mean_insolation.(ϕ; S₀ = S₀₁[1])
+	cold_climate_model = OneDModel(ImplicitTimeStep(), length(low_F); κ, ε = varε, α = α_model, Q = low_F)
+	evolve_model!(cold_climate_model, Δt = 100, stop_year = 100)
+
+	new_current_climate_model = OneDModel(ImplicitTimeStep(), length(low_F); κ, ε = varε, α = α_model, Q = F)
+	new_current_climate_model.Tₛ .= cold_climate_model.Tₛ
+	new_current_climate_model.Tₐ .= cold_climate_model.Tₐ
+	
+	evolve_model!(new_current_climate_model, Δt = 100, stop_year = 1000)
+
+	
+	plot_latitudinal_variables!(ϕ, [current_climate_model.Tₛ .- 273,
+									cold_climate_model.Tₛ .- 273, 
+									new_current_climate_model.Tₛ .- 273], 
+									["current climate",
+									 "cold climate (S₀ = 1200)",
+									 "current climate, different initial conditions"], 
+									[:blue, :blue, :red, :black], 
+									[:dash, :solid, :solid, :dashdot];
+									ylims = (-100, 70))
 end
 
 # ╔═╡ b768707a-5077-4662-bcd1-6d38b3e4f929
@@ -2878,12 +2947,12 @@ version = "3.5.0+0"
 # ╟─00776863-2260-48a8-83c1-3f2696f11d96
 # ╟─16ca594c-c9db-4528-aa65-bab12cb6e22a
 # ╟─ea517bbf-eb14-4d72-a4f4-9bb823e02f88
-# ╠═fd14e483-94a4-4a8b-8ca5-0eb24d487e4a
+# ╟─b65e2af0-9a08-4915-834b-1a20b2440891
+# ╠═dfde2f6a-f612-4013-8d42-5590221167c9
+# ╠═91dec8b7-a9da-4c62-973e-2fd8e0a92e58
 # ╟─140bcdac-4145-47b3-952f-bfe50f6ed41c
 # ╟─849775fa-4990-47d3-afe0-d0a049bb90af
 # ╠═4d517df8-0496-40a2-8e44-5beda6cd7226
-# ╟─b5d7b8b7-b797-4157-a814-1df2b3a8d2aa
-# ╠═0331aa02-a0a0-4f4f-b3cc-b7ced5357edc
 # ╟─6932b969-0760-4f09-935a-478ac56de262
 # ╠═1d8a69b7-52db-4865-8bf2-712c2b6442f5
 # ╟─5884999f-f136-4ae7-8831-cc3a36f50a98
@@ -2891,7 +2960,7 @@ version = "3.5.0+0"
 # ╠═6ce47d90-d5a2-43c0-ad64-27c13aa0f5db
 # ╟─4640a179-3373-4901-ac31-31022e8c7eb2
 # ╟─d13c319d-345a-40b8-b90d-b0b226225434
-# ╠═8f21fc70-e369-4938-b0c2-5a4fbae71713
+# ╟─8f21fc70-e369-4938-b0c2-5a4fbae71713
 # ╟─901548f8-a6c9-48f8-9c8f-887500081316
 # ╟─567fa8d3-35b4-40d7-8404-ae78d2874380
 # ╟─0d8fffdc-a9f5-4d82-84ec-0f27acc04c21
@@ -2912,9 +2981,15 @@ version = "3.5.0+0"
 # ╠═80c72898-139e-44af-bab0-ca638f282188
 # ╟─b0ca64b8-0211-4d1c-b007-7583bf8ac908
 # ╟─51f3fd00-508b-4b42-bd95-ae19cb19b4db
-# ╟─65dedef2-03e5-4e0f-8022-53168952e7a8
+# ╠═65dedef2-03e5-4e0f-8022-53168952e7a8
+# ╠═8afe64e3-d19a-4801-b7b8-56d886f7a59a
 # ╟─ebcf224f-c006-4098-abf0-5c3644e2ee97
-# ╟─1c33dc21-04af-4139-9061-696db73c3249
+# ╠═73238f6c-b8d3-4f92-bdfe-1c657e239903
+# ╠═247b4c3a-2777-47ed-8cc9-e90a5cdb640b
+# ╠═0353c906-55d9-4419-a55d-8fcd374004d7
+# ╠═1c33dc21-04af-4139-9061-696db73c3249
+# ╟─70713834-3246-45a4-a4c8-68513bb853ce
+# ╠═2b33a8a1-3772-4fb3-a914-a20a7aae91bc
 # ╟─b768707a-5077-4662-bcd1-6d38b3e4f929
 # ╟─419c8c31-6408-489a-a50e-af712cf20b7e
 # ╟─00000000-0000-0000-0000-000000000001
