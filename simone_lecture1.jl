@@ -1347,7 +1347,7 @@ begin
 end
 
 # ╔═╡ 80c72898-139e-44af-bab0-ca638f282188
-sum(HF(model_1D) .* cos.(model_1D.ϕᶜ) .* (model_1D.ϕᶠ[2:end] .- model_1D.ϕᶠ[1:end-1]))
+# sum(HF(model_1D) .* cos.(model_1D.ϕᶜ) .* (model_1D.ϕᶠ[2:end] .- model_1D.ϕᶠ[1:end-1]))
 
 # ╔═╡ b0ca64b8-0211-4d1c-b007-7583bf8ac908
 md"""
@@ -1415,42 +1415,42 @@ where ``\alpha(\phi)`` is our previously defined array `varα`, ``T_{ice} = -10`
 """
 
 # ╔═╡ 65dedef2-03e5-4e0f-8022-53168952e7a8
-begin 	
-	α_feedback(T, α) = T > 273.15 - 10.0 ? α : 0.7
-	κ = 0.5
-	α_model(model) = α_feedback.(model.Tₛ, varα)
+# begin 	
+# 	α_feedback(T, α) = T > 273.15 - 10.0 ? α : 0.7
+# 	κ = 0.5
+# 	α_model(model) = α_feedback.(model.Tₛ, varα)
 
-	current_climate_model = OneDModel(ImplicitTimeStep(), length(F); κ, ε = varε, α = α_model, Q = F)
+# 	current_climate_model = OneDModel(ImplicitTimeStep(), length(F); κ, ε = varε, α = α_model, Q = F)
 
-	current_climate_model.Tₛ .= model_1D.Tₛ
-	current_climate_model.Tₐ .= model_1D.Tₐ
+# 	current_climate_model.Tₛ .= model_1D.Tₛ
+# 	current_climate_model.Tₐ .= model_1D.Tₐ
 
-	evolve_model!(current_climate_model, Δt = 50, stop_year = 150)
-	plot_latitudinal_variables!(ϕ, [feedback_model.Tₛ .- 273, 
-									model_1D.Tₛ .- 273,
-									current_climate_model.Tₛ .- 273,
-									T_obs .- 273], 
-									["model with κ = 0",
-									 "model with κ = $κ_slider",
-									 "model with α feedback",
-									 "observed T"], 
-									[:blue, :blue, :red, :black], 
-									[:dash, :solid, :solid, :dashdot];
-									ylims = (-70, 70))
+# 	evolve_model!(current_climate_model, Δt = 50, stop_year = 150)
+# 	plot_latitudinal_variables!(ϕ, [feedback_model.Tₛ .- 273, 
+# 									model_1D.Tₛ .- 273,
+# 									current_climate_model.Tₛ .- 273,
+# 									T_obs .- 273], 
+# 									["model with κ = 0",
+# 									 "model with κ = $κ_slider",
+# 									 "model with α feedback",
+# 									 "observed T"], 
+# 									[:blue, :blue, :red, :black], 
+# 									[:dash, :solid, :solid, :dashdot];
+# 									ylims = (-70, 70))
 
 
-	current_figure()
-end
+# 	current_figure()
+# end
 
 # ╔═╡ 8afe64e3-d19a-4801-b7b8-56d886f7a59a
-plot_latitudinal_variables!(ϕ, [ASR(current_climate_model), 
-								OLR(current_climate_model), 
-								HF(current_climate_model)], 
-								["ASR", "OLR", "transport"], 
-								[:red, :blue, :green], 
-								[:solid, :solid, :solid],
-								ylabel = "Energy Budget Wm⁻²",
-								leg_pos = :cc)
+# plot_latitudinal_variables!(ϕ, [ASR(current_climate_model), 
+# 								OLR(current_climate_model), 
+# 								HF(current_climate_model)], 
+# 								["ASR", "OLR", "transport"], 
+# 								[:red, :blue, :green], 
+# 								[:solid, :solid, :solid],
+# 								ylabel = "Energy Budget Wm⁻²",
+# 								leg_pos = :cc)
 
 # ╔═╡ ebcf224f-c006-4098-abf0-5c3644e2ee97
 md"""
@@ -1459,44 +1459,44 @@ Let's define an **ice_line** function retreives this latitude
 """
 
 # ╔═╡ 73238f6c-b8d3-4f92-bdfe-1c657e239903
-function ice_line(model)
-	idx = searchsortedlast(model.Tₛ, 273.15 - 10)
+# function ice_line(model)
+# 	idx = searchsortedlast(model.Tₛ, 273.15 - 10)
 
-	return idx == 0 ? 90.0 : idx > length(model.ϕᶜ) ? 0.0 :  - rad2deg(model.ϕᶜ[idx])
-end
+# 	return idx == 0 ? 90.0 : idx > length(model.ϕᶜ) ? 0.0 :  - rad2deg(model.ϕᶜ[idx])
+# end
 
 # ╔═╡ 247b4c3a-2777-47ed-8cc9-e90a5cdb640b
-"the ice line of our model is at $(ice_line(current_climate_model)) ᵒN"
+# "the ice line of our model is at $(ice_line(current_climate_model)) ᵒN"
 
 # ╔═╡ 0353c906-55d9-4419-a55d-8fcd374004d7
 begin
-	function calc_different_climates(initial_condition_model; forcing)
-		ice_line_model = zeros(length(forcing))
-		for (idx, S₀) in enumerate(forcing)
-			F₂ = annual_mean_insolation.(ϕ; S₀)
-			model_tmp = OneDModel(ImplicitTimeStep(), length(F₂); κ, ε = varε, α = α_model, Q = F₂)
+	# function calc_different_climates(initial_condition_model; forcing)
+	# 	ice_line_model = zeros(length(forcing))
+	# 	for (idx, S₀) in enumerate(forcing)
+	# 		F₂ = annual_mean_insolation.(ϕ; S₀)
+	# 		model_tmp = OneDModel(ImplicitTimeStep(), length(F₂); κ, ε = varε, α = α_model, Q = F₂)
 	
-			model_tmp.Tₛ .= initial_condition_model.Tₛ
-			model_tmp.Tₐ .= initial_condition_model.Tₐ
+	# 		model_tmp.Tₛ .= initial_condition_model.Tₛ
+	# 		model_tmp.Tₐ .= initial_condition_model.Tₐ
 	
-			evolve_model!(model_tmp, Δt = 100, stop_year = 100)
+	# 		evolve_model!(model_tmp, Δt = 100, stop_year = 100)
 	
-			ice_line_model[idx] = ice_line(model_tmp)
-		end
-		return ice_line_model
-	end
+	# 		ice_line_model[idx] = ice_line(model_tmp)
+	# 	end
+	# 	return ice_line_model
+	# end
 end
 
 # ╔═╡ 1c33dc21-04af-4139-9061-696db73c3249
 begin 
-	S₀₁ = range(1200.0, 1450, length = 25)
-	ice_line_current = calc_different_climates(current_climate_model, forcing = S₀₁)
+	# S₀₁ = range(1200.0, 1450, length = 25)
+	# ice_line_current = calc_different_climates(current_climate_model, forcing = S₀₁)
 
-	figure_ice = Figure(resolution = (500, 300))
+	# figure_ice = Figure(resolution = (500, 300))
 	
-	ax_ice = Axis(figure_ice[1, 1], title = "ice line", ylabel = "ϕ [ᵒN]", xlabel = "forcing S₀ [W/m²]")
-	lines!(ax_ice, S₀₁, ice_line_current, label = "initial condition: current climate")
-	current_figure()
+	# ax_ice = Axis(figure_ice[1, 1], title = "ice line", ylabel = "ϕ [ᵒN]", xlabel = "forcing S₀ [W/m²]")
+	# lines!(ax_ice, S₀₁, ice_line_current, label = "initial condition: current climate")
+	# current_figure()
 end
 
 # ╔═╡ 70713834-3246-45a4-a4c8-68513bb853ce
@@ -1507,26 +1507,26 @@ Let's start from another initial condition
 
 # ╔═╡ 2b33a8a1-3772-4fb3-a914-a20a7aae91bc
 begin
-	low_F = annual_mean_insolation.(ϕ; S₀ = S₀₁[1])
-	cold_climate_model = OneDModel(ImplicitTimeStep(), length(low_F); κ, ε = varε, α = α_model, Q = low_F)
-	evolve_model!(cold_climate_model, Δt = 100, stop_year = 100)
+	# low_F = annual_mean_insolation.(ϕ; S₀ = S₀₁[1])
+	# cold_climate_model = OneDModel(ImplicitTimeStep(), length(low_F); κ, ε = varε, α = α_model, Q = low_F)
+	# evolve_model!(cold_climate_model, Δt = 100, stop_year = 100)
 
-	new_current_climate_model = OneDModel(ImplicitTimeStep(), length(low_F); κ, ε = varε, α = α_model, Q = F)
-	new_current_climate_model.Tₛ .= cold_climate_model.Tₛ
-	new_current_climate_model.Tₐ .= cold_climate_model.Tₐ
+	# new_current_climate_model = OneDModel(ImplicitTimeStep(), length(low_F); κ, ε = varε, α = α_model, Q = F)
+	# new_current_climate_model.Tₛ .= cold_climate_model.Tₛ
+	# new_current_climate_model.Tₐ .= cold_climate_model.Tₐ
 	
-	evolve_model!(new_current_climate_model, Δt = 100, stop_year = 1000)
+	# evolve_model!(new_current_climate_model, Δt = 100, stop_year = 1000)
 
 	
-	plot_latitudinal_variables!(ϕ, [current_climate_model.Tₛ .- 273,
-									cold_climate_model.Tₛ .- 273, 
-									new_current_climate_model.Tₛ .- 273], 
-									["current climate",
-									 "cold climate (S₀ = 1200)",
-									 "current climate, different initial conditions"], 
-									[:blue, :blue, :red, :black], 
-									[:dash, :solid, :solid, :dashdot];
-									ylims = (-100, 70))
+	# plot_latitudinal_variables!(ϕ, [current_climate_model.Tₛ .- 273,
+	# 								cold_climate_model.Tₛ .- 273, 
+	# 								new_current_climate_model.Tₛ .- 273], 
+	# 								["current climate",
+	# 								 "cold climate (S₀ = 1200)",
+	# 								 "current climate, different initial conditions"], 
+	# 								[:blue, :blue, :red, :black], 
+	# 								[:dash, :solid, :solid, :dashdot];
+	# 								ylims = (-100, 70))
 end
 
 # ╔═╡ b768707a-5077-4662-bcd1-6d38b3e4f929
