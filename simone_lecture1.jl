@@ -482,7 +482,7 @@ latitude_dependent_equilibrium_temperature(lat, ε, α) =
 # ╔═╡ 1431b11f-7838-41da-92e3-bcca9f4215b3
 begin 
 	mutable struct ZeroDModel{S, T, E, A, F, C}
-		stepper :: S  # Implicit or explicit time stepping
+		stepper :: S  # time stepping method
 		Tₛ :: T       # surface temperature
 		Tₐ :: T       # atmospheric temperature
 		ε  :: E       # atmospheric emissivity
@@ -492,13 +492,14 @@ begin
 		Cₐ :: C       # atmospheric heat capacity
 	end
 	
-	# Types that specify the time stepping method
+	# Types that specify the time-stepping method
 	struct ExplicitTimeStep end
 	struct ImplicitTimeStep end
 
+	# convenience alias for dispatch
 	const ExplicitZeroDModel = ZeroDModel{<:ExplicitTimeStep}
 	const ImplicitZeroDModel = ZeroDModel{<:ImplicitTimeStep}
-
+	
 	# Let's define functions to retrieve the properties of the model.
 	# It is always useful to define functions to extract struct properties so we 
 	# have the possibility to extend them in the future
@@ -852,15 +853,18 @@ end
 # Remember that our temperature can be a scalar or a vector, 
 # depending on the latitude given to construct the model
 function time_step!(model::ExplicitZeroDModel, Δt)
+	# Temperatures at time step n
 	Tₛ = model.Tₛ
 	Tₐ = model.Tₐ
 
 	α = albedo(model)
 	ε = emissivity(model)
 
+	# Calculate the explicit tendencies
 	Gₛ = @. σ * (ε * Tₐ^4 - Tₛ^4) + (1 - α) * model.Q 
 	Gₐ = @. σ * ε * (Tₛ^4 - 2*Tₐ^4)
 
+	# update temperatures to time step n+1
 	@. model.Tₛ += Δt * Gₛ / model.Cₛ
 	@. model.Tₐ += Δt * Gₐ / model.Cₐ
 end
