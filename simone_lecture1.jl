@@ -783,7 +783,7 @@ C_s \frac{\partial T_s}{\partial t} & = - \sigma T_s^4 + \varepsilon \sigma T_a^
 
 We need to define a ``\Delta x`` (or ``\Delta \phi`` in our case) and we can discretize a spatial derivative in the same way as the time-derivative
 ```math
-\left[\frac{1}{\cos{\phi}} \frac{\partial}{\partial \phi} \left(\cos{\phi}  \frac{\partial T}{\partial \phi} \right) \right]_j \approx \frac{1}{\cos{\phi_j}} \left(\left[ \cos{\phi} \frac{\partial T}{\partial \phi} \right]_{j+1/2} - \left[ \cos{\phi} \frac{\partial T}{\partial \phi} \right]_{j-1/2} \right)
+\left[\frac{1}{\cos{\phi}} \frac{\partial}{\partial \phi} \left(\cos{\phi}  \frac{\partial T}{\partial \phi} \right) \right]_j \approx \frac{1}{\cos{\phi_j} \Delta \phi} \left(\left[ \cos{\phi} \frac{\partial T}{\partial \phi} \right]_{j+1/2} - \left[ \cos{\phi} \frac{\partial T}{\partial \phi} \right]_{j-1/2} \right)
 ```
 In the same way we can approximate the first derivative on interfaces as
 ```math
@@ -791,7 +791,7 @@ In the same way we can approximate the first derivative on interfaces as
 ```
 The additional tendency term caused by heat transport becomes:
 ```math
-G_\kappa = \frac{1}{\cos{\phi_j}} \left(\cos{\phi_{j+1/2}} \frac{T_{j+1} - T_j}{\Delta \phi} - \cos{\phi_{j-1/2}} \frac{T_{j} - T_{j-1}}{\Delta \phi} \right)
+G_\kappa = \frac{\kappa}{\cos{\phi_j}\Delta \phi} \left(\cos{\phi_{j+1/2}} \frac{T_{j+1} - T_j}{\Delta \phi} - \cos{\phi_{j-1/2}} \frac{T_{j} - T_{j-1}}{\Delta \phi} \right)
 ```
 """
 
@@ -891,7 +891,7 @@ function construct_matrix(model, Δt)
 	ds = @. -ε*eₛ
 
 	# spdiagm(idx => vector) constructs a sparse matrix 
-	#with vector `vec` at the `idx`th diagonal 
+	# with vector `vec` at the `idx`th diagonal 
 	A = spdiagm(0 => D,
 				n => [ds...],
 			   -n => [da...])
@@ -975,8 +975,38 @@ end
 md"""
 ### Coding implicit time stepping with diffusion
 
-to code an implicit time stepping method, we can reutilize the matrix we used before (the sources and interexchange terms do not change!)
+to code an implicit time stepping method, we can reutilize the matrix we used before (the sources and interexchange terms do not change)
+There are new terms to be added:
 
+```math
+G_\kappa^{(n+1)} = \frac{\kappa}{\cos{\phi_j}\Delta \phi} \left(\cos{\phi_{j+1/2}} \frac{T_{j+1}^{(n+1)} - T_j^{(n+1)}}{\Delta \phi} - \cos{\phi_{j-1/2}} \frac{T_{j}^{(n+1)} - T_{j-1}^{(n+1)}}{\Delta \phi} \right)
+```
+we can rearrange it as
+```math
+G_\kappa^{(n+1)} = \kappa\frac{\cos{\phi_{j-1/2}}}{\cos{\phi_j}\Delta\phi^2}  T_{j-1}^{(n+1)} + \kappa\frac{\cos{\phi_{j+1/2}}}{\cos{\phi_j}\Delta\phi^2}  T_{j+1}^{(n+1)} - \kappa\frac{\cos{\phi_{j+1/2}} + \cos{\phi_{j-1/2}}}{\cos{\phi_j}\Delta\phi^2} T_j^{(n+1)}
+```
+```math
+G_\kappa^{(n+1)} = a T_{j-1}^{(n+1)} + c T_{j+1}^{(n+1)} - (a+c) T_j^{(n+1)}
+```
+where 
+```math
+a = \kappa\frac{\cos{\phi_{j-1/2}}}{\cos{\phi_j}\Delta\phi^2} \ \ \ \text{and} \ \ \ c = \kappa\frac{\cos{\phi_{j+1/2}}}{\cos{\phi_j}\Delta\phi^2}
+```
+we have to add ``(a+c)`` to the diagonal, ``a`` to the diagonal at position ``-1`` and ``c`` to the diagonal at position ``+1``
+
+**_Adding boundary conditions_** \
+at ``j = 1/2`` we impose a no flux boundary condition. This implies that
+```math
+F_{1/2} = 0 \Rightarrow T_0 = T_1
+```
+then ``G_{\kappa}^{(n+1)}`` at 1 simplifies to
+```math
+\left[G_\kappa^{(n+1)}\right]_1 = c T_{2}^{(n+1)} - c T_1^{(n+1)}
+```
+Simply put, we avoid adding ``a`` to the first row. The same happens for ``G_{\kappa}^{(n+1)}`` at ``m`` (with ``m`` the length of ``\phi``) where, assuming that ``F_{m+1/2} = 0`` implies that
+```math
+\left[G_\kappa^{(n+1)}\right]_m = a T_{n-1}^{(m+1)} - a T_m^{(n+1)}
+```
 """
 
 # ╔═╡ 7c7439f0-d678-4b68-a5e5-bee650fa17e2
@@ -987,21 +1017,24 @@ function construct_diffusion_matrix(model, Δt)
 	cosϕᶜ = cos.(model.ϕᶜ)
 	Δϕ = model.ϕᶠ[2] - model.ϕᶠ[1]
 
-	a = @. - 1 / Δϕ^2 / cosϕᶜ * cos(model.ϕᶠ[1:end-1])
-	c = @. - 1 / Δϕ^2 / cosϕᶜ * cos(model.ϕᶠ[2:end])
+	a = @. 1 / Δϕ^2 / cosϕᶜ * cos(model.ϕᶠ[1:end-1])
+	c = @. 1 / Δϕ^2 / cosϕᶜ * cos(model.ϕᶠ[2:end])
 
-	n = length(model.Tₛ)
-    for i in 1:n
-        if i < n
-            A[i  , i+1]   = Δt * model.κₐ * c[i]
-            A[i+n, i+1+n] = Δt * model.κₛ * c[i]
-        end
+	m = length(model.Tₛ)
+    for i in 1:m
+		# Adding the off-diagonal entries corresponding to Tⱼ₊₁ (exclude the last row)
+        if i < m
+            A[i  , i+1]   = - Δt * model.κₐ * c[i]
+            A[i+m, i+1+m] = - Δt * model.κₛ * c[i]
+		end
+		# Adding the off-diagonal entries corresponding to Tⱼ₋₁ (exclude the first row)
         if i > 1 
-            A[i,   i-1]   = Δt * model.κₐ * a[i]
-            A[i+n, i-1+n] = Δt * model.κₛ * a[i]
+            A[i,   i-1]   = - Δt * model.κₐ * a[i]
+            A[i+m, i-1+m] = - Δt * model.κₛ * a[i]
         end
-        A[i  , i]   -= Δt * model.κₐ * (a[i] + c[i])
-        A[i+n, i+n] -= Δt * model.κₛ * (a[i] + c[i])
+		# Adding the diagonal entries
+        A[i  , i]   += Δt * model.κₐ * (a[i] + c[i])
+        A[i+m, i+m] += Δt * model.κₛ * (a[i] + c[i])
     end
 	
 	return A
@@ -1460,35 +1493,35 @@ Let's define an **ice_line** function retreives this latitude
 # "the ice line of our model is at $(ice_line(current_climate_model)) ᵒN"
 
 # ╔═╡ 0353c906-55d9-4419-a55d-8fcd374004d7
-begin
-	# function calc_different_climates(initial_condition_model; forcing)
-	# 	ice_line_model = zeros(length(forcing))
-	# 	for (idx, S₀) in enumerate(forcing)
-	# 		F₂ = annual_mean_insolation.(ϕ; S₀)
-	# 		model_tmp = OneDModel(ImplicitTimeStep(), length(F₂); κ, ε = varε, α = α_model, Q = F₂)
+# begin
+# 	function calc_different_climates(initial_condition_model; forcing)
+# 		ice_line_model = zeros(length(forcing))
+# 		for (idx, S₀) in enumerate(forcing)
+# 			F₂ = annual_mean_insolation.(ϕ; S₀)
+# 			model_tmp = OneDModel(ImplicitTimeStep(), length(F₂); κ, ε = varε, α = α_model, Q = F₂)
 	
-	# 		model_tmp.Tₛ .= initial_condition_model.Tₛ
-	# 		model_tmp.Tₐ .= initial_condition_model.Tₐ
+# 			model_tmp.Tₛ .= initial_condition_model.Tₛ
+# 			model_tmp.Tₐ .= initial_condition_model.Tₐ
 	
-	# 		evolve_model!(model_tmp, Δt = 100, stop_year = 100)
+# 			evolve_model!(model_tmp, Δt = 100, stop_year = 100)
 	
-	# 		ice_line_model[idx] = ice_line(model_tmp)
-	# 	end
-	# 	return ice_line_model
-	# end
-end
+# 			ice_line_model[idx] = ice_line(model_tmp)
+# 		end
+# 		return ice_line_model
+# 	end
+# end
 
 # ╔═╡ 1c33dc21-04af-4139-9061-696db73c3249
-begin 
-	# S₀₁ = range(1200.0, 1450, length = 25)
-	# ice_line_current = calc_different_climates(current_climate_model, forcing = S₀₁)
+# begin 
+# 	S₀₁ = range(1200.0, 1450, length = 25)
+# 	ice_line_current = calc_different_climates(current_climate_model, forcing = S₀₁)
 
-	# figure_ice = Figure(resolution = (500, 300))
+# 	figure_ice = Figure(resolution = (500, 300))
 	
-	# ax_ice = Axis(figure_ice[1, 1], title = "ice line", ylabel = "ϕ [ᵒN]", xlabel = "forcing S₀ [W/m²]")
-	# lines!(ax_ice, S₀₁, ice_line_current, label = "initial condition: current climate")
-	# current_figure()
-end
+# 	ax_ice = Axis(figure_ice[1, 1], title = "ice line", ylabel = "ϕ [ᵒN]", xlabel = "forcing S₀ [W/m²]")
+# 	lines!(ax_ice, S₀₁, ice_line_current, label = "initial condition: current climate")
+# 	current_figure()
+# end
 
 # ╔═╡ 70713834-3246-45a4-a4c8-68513bb853ce
 md"""
@@ -1497,28 +1530,28 @@ Let's start from another initial condition
 """
 
 # ╔═╡ 2b33a8a1-3772-4fb3-a914-a20a7aae91bc
-begin
-	# low_F = annual_mean_insolation.(ϕ; S₀ = S₀₁[1])
-	# cold_climate_model = OneDModel(ImplicitTimeStep(), length(low_F); κ, ε = varε, α = α_model, Q = low_F)
-	# evolve_model!(cold_climate_model, Δt = 100, stop_year = 100)
+# begin
+# 	low_F = annual_mean_insolation.(ϕ; S₀ = S₀₁[1])
+# 	cold_climate_model = OneDModel(ImplicitTimeStep(), length(low_F); κ, ε = varε, α = α_model, Q = low_F)
+# 	evolve_model!(cold_climate_model, Δt = 100, stop_year = 100)
 
-	# new_current_climate_model = OneDModel(ImplicitTimeStep(), length(low_F); κ, ε = varε, α = α_model, Q = F)
-	# new_current_climate_model.Tₛ .= cold_climate_model.Tₛ
-	# new_current_climate_model.Tₐ .= cold_climate_model.Tₐ
+# 	new_current_climate_model = OneDModel(ImplicitTimeStep(), length(low_F); κ, ε = varε, α = α_model, Q = F)
+# 	new_current_climate_model.Tₛ .= cold_climate_model.Tₛ
+# 	new_current_climate_model.Tₐ .= cold_climate_model.Tₐ
 	
-	# evolve_model!(new_current_climate_model, Δt = 100, stop_year = 1000)
+# 	evolve_model!(new_current_climate_model, Δt = 100, stop_year = 1000)
 
 	
-	# plot_latitudinal_variables!(ϕ, [current_climate_model.Tₛ .- 273,
-	# 								cold_climate_model.Tₛ .- 273, 
-	# 								new_current_climate_model.Tₛ .- 273], 
-	# 								["current climate",
-	# 								 "cold climate (S₀ = 1200)",
-	# 								 "current climate, different initial conditions"], 
-	# 								[:blue, :blue, :red, :black], 
-	# 								[:dash, :solid, :solid, :dashdot];
-	# 								ylims = (-100, 70))
-end
+# 	plot_latitudinal_variables!(ϕ, [current_climate_model.Tₛ .- 273,
+# 									cold_climate_model.Tₛ .- 273, 
+# 									new_current_climate_model.Tₛ .- 273], 
+# 									["current climate",
+# 									 "cold climate (S₀ = 1200)",
+# 									 "current climate, different initial conditions"], 
+# 									[:blue, :blue, :red, :black], 
+# 									[:dash, :solid, :solid, :dashdot];
+# 									ylims = (-100, 70))
+# end
 
 # ╔═╡ b768707a-5077-4662-bcd1-6d38b3e4f929
 html"""
@@ -2954,7 +2987,7 @@ version = "3.5.0+0"
 # ╟─8f21fc70-e369-4938-b0c2-5a4fbae71713
 # ╟─901548f8-a6c9-48f8-9c8f-887500081316
 # ╟─567fa8d3-35b4-40d7-8404-ae78d2874380
-# ╟─0d8fffdc-a9f5-4d82-84ec-0f27acc04c21
+# ╠═0d8fffdc-a9f5-4d82-84ec-0f27acc04c21
 # ╠═930935f8-832a-45b4-8e5e-b194afa917c6
 # ╠═abdbbcaa-3a76-4a47-824d-6da73bc71c31
 # ╟─1cef338d-5c4a-4ea5-98d7-9ac4f11922f3
