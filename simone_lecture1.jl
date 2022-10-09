@@ -65,17 +65,38 @@ end
 # ╔═╡ 8ef88534-dac4-4a62-b623-dcaf63482a96
 md"""
 # Section 2.3: a latitude-dependent climate
+
+In section 2.1 you have seen your first climate model, a system of equations that predicts the earth's average surface temperature depending on the sun's forcing and the level of absorption from the atmosphere. 
+
+```math
+\begin{align}
+C_a \frac{d T_a}{dt} & = \varepsilon \sigma T_s ^4 - 2\varepsilon \sigma T_a^4 \\
+C_s \frac{d T_s}{dt} & = \varepsilon \sigma T_a^4 - \sigma T_s ^4 + (1 - \alpha) \frac{S_0}{4}
+\end{align}
+```
+
+This simple model is handy for predicting global heating and cooling but does not bring us much further.
+
+In particular, an essential quantity we are interested in predicting is the temperature difference between low and high latitudes. The latitudinal temperature gradient is a significant quantity that drives motions in the atmosphere and is the cause of all major climatic events. We will also later see that the latitudinal temperature gradient is one measure of the efficiency of the global climate system in redistributing heat and is used to test the ability of models to represent the climate system through time
+
+To improve our simple model, we will introduce an extra dimension, the latitude
+
+
+$(Resource("https://raw.githubusercontent.com/simone-silvestri/ComputationalThinking/main/two-models.png", :height => 200))
+
+**Figure**: difference between a 0D model (averaged over earth's surface) and a 1D model (averaged over spherical segments)
+
 """
 
 # ╔═╡ cfb8f979-37ca-40ab-8d3c-0053911717e7
 md"""
 ## Variable insolation
 
-Let us introduce some variability in our climate system. The variability is imposed on the system by the forcing. You already saw that the spatially and annual averaged radiative flux that reaches the earth is
+Let us introduce some variability in our climate system. The variability is imposed on the system by the forcing. You already saw that the spatially and annual averaged radiative flux that reaches the earth (in units of W/m²) is
 ```math
 S_0 / 4 , \ \ \ \ \text{with} \ \ \ \ S_0 \approx 1365 \ W m^{-2}
 ```
-of which only ``(1 - \alpha)`` is absorbed (where ``alpha`` is the albedo (or reflectivity) of the surface). This flux is not distributed equally along the surface of the planet. The insolation amount and intensity vary in different locations, days, seasons, and years. \
+of which only ``(1 - \alpha)`` is absorbed (where ``\alpha`` is the albedo (or reflectivity) of the surface). This flux is not distributed equally along the surface of the planet. The insolation amount and intensity vary in different locations, days, seasons, and years. \
 
 Three main parameters affect the intensity of the incoming solar radiation:
 
@@ -83,18 +104,7 @@ Three main parameters affect the intensity of the incoming solar radiation:
 - the hour of the day
 - the day of the year
 
-You have seen a reduced model that looks like this 
-
-$(Resource("https://raw.githubusercontent.com/simone-silvestri/ComputationalThinking/main/sun-earth-system-0d.png", :height => 80))
-**Figure**: 0D model in which the earth is modeled as a "point", the incoming radiation is ``S_0(1 - \alpha)/4``
-
-while the full picture looks more like this
-
-$(Resource("https://raw.githubusercontent.com/simone-silvestri/ComputationalThinking/main/sun-earth-system.png", :height => 100))
-**Figure**: 3D model with variations in hours/day/season
-
 In practice, we will simplify the system by averaging the dependencies on hour and day. What remains is a 1D model which depends on time and latitude.
-Let us explore how to accurately model the insolation depending on those three parameters.
 """
 
 # ╔═╡ eb95e773-b12a-40a4-a4f1-9dced86fc8a2
@@ -129,7 +139,7 @@ $(Resource("https://ars.els-cdn.com/content/image/3-s2.0-B9780080247441500061-f0
 
 # ╔═╡ 75cacd05-c9f8-44ba-a0ce-8cde93fc8b85
 md"""
-### Bringing it all together
+#### Bringing it all together
 
 We model the instantaneous solar flux with
 ```math
@@ -483,7 +493,7 @@ latitude_dependent_equilibrium_temperature(lat, ε, α) =
 
 # ╔═╡ 1431b11f-7838-41da-92e3-bcca9f4215b3
 begin 
-	mutable struct ZeroDModel{S, T, E, A, F, C}
+	mutable struct RadiativeModel{S, T, E, A, F, C}
 		stepper :: S  # time stepping method
 		Tₛ :: T       # surface temperature
 		Tₐ :: T       # atmospheric temperature
@@ -499,8 +509,8 @@ begin
 	struct ImplicitTimeStep end
 
 	# convenience alias for dispatch
-	const ExplicitZeroDModel = ZeroDModel{<:ExplicitTimeStep}
-	const ImplicitZeroDModel = ZeroDModel{<:ImplicitTimeStep}
+	const ExplicitRadiativeModel = RadiativeModel{<:ExplicitTimeStep}
+	const ImplicitRadiativeModel = RadiativeModel{<:ImplicitTimeStep}
 	
 	# Let's define functions to retrieve the properties of the model.
 	# It is always useful to define functions to extract struct properties so we 
@@ -510,12 +520,12 @@ begin
 	emissivity(model) = model.ε
 
 	# Utility functions to @show the model
-	timestepping(model::ExplicitZeroDModel) = "Explicit"
-	timestepping(model::ImplicitZeroDModel) = "Implicit"
+	timestepping(model::ExplicitRadiativeModel) = "Explicit"
+	timestepping(model::ImplicitRadiativeModel) = "Implicit"
 
 	# A pretty show method that displays the model's parameters
-	function Base.show(io::IO, model::ZeroDModel)
-		print(io, "Zero-D energy budget model with:", '\n',
+	function Base.show(io::IO, model::RadiativeModel)
+		print(io, "Radiative energy budget model with:", '\n',
 		"├── time stepping: $(timestepping(model))", '\n',
 		"├── length model: $(length(model.Tₛ))", '\n',
     	"├── ε: $(emissivity(model))", '\n',
@@ -524,7 +534,7 @@ begin
 	end
 
 	# A constructor with some defaults...
-	function ZeroDModel(step = ImplicitTimeStep(); 
+	function RadiativeModel(step = ImplicitTimeStep(); 
 						ε = 0.8, 
 					    α = 0.2985, 
 						ϕ = range(-89.0, 89.0,length=90))
@@ -534,13 +544,13 @@ begin
 		Tₐ_init = 180.0 .* ones(N)
 
 		args = (Tₛ_init, Tₐ_init, ε, α, Q, Cₛ, Cₐ)
-		return ZeroDModel(step, args...)
+		return RadiativeModel(step, args...)
 	end
 end
 
 # ╔═╡ de5d415f-8216-473d-8e0b-a73139540e1e
 # Let's test the constructor and the show method
-ZeroDModel(ϕ = 45)
+RadiativeModel(ϕ = 45)
 
 # ╔═╡ b85fdf41-ef8f-4314-bc3c-383947b9f02c
 @bind values PlutoUI.combine() do Child
@@ -686,8 +696,9 @@ end
 md""" ε $(@bind ε PlutoUI.Slider(0:0.01:1, show_value=true, default = 0.0)) """
 
 # ╔═╡ 6ce47d90-d5a2-43c0-ad64-27c13aa0f5db
-# ZeroDModel has parametric types {S, T, E, A, F, C} where the third one (E) corresponds to the emissivity
-emissivity(model::ZeroDModel{<:Any, <:Any, <:Function}) = model.ε(model)
+# RadiativeModel has parametric types {S, T, E, A, F, C} where the third one (E) 
+# corresponds to theemissivity
+emissivity(model::RadiativeModel{<:Any, <:Any, <:Function}) = model.ε(model)
 
 # ╔═╡ 8f21fc70-e369-4938-b0c2-5a4fbae71713
 md"""
@@ -711,13 +722,19 @@ To solve global circulation, we need to solve a complex system of partial differ
 & \frac{\partial \rho}{\partial t} + \boldsymbol{\nabla} \cdot (\rho \boldsymbol{u}) = 0 \\
 \end{align}
 ```
-complemented by an equation of state (usually ideal gas) in the form ``p = EOS(\rho, e)``
+complemented by an equation of state (usually ideal gas) in the form ``p = EOS(\rho, e)``. General Circulation Models (or GCMs) solve this system of equations on a discrete three-dimensional grid to provide velocities and temperatures on the surface and in the atmosphere.
 
+$(Resource("https://d32ogoqmya1dw8.cloudfront.net/images/eet/envisioningclimatechange/gcm_grid_graphic.jpg", :height => 300))
+
+**Figure**: schematic depicting the discretization in a GCM \
+GCMs are usually massive, sophisticated models which require years to develop and have to run on high-performance computing centers.
 """
 
 # ╔═╡ 901548f8-a6c9-48f8-9c8f-887500081316
 md"""
 # Section 2.4: Heat transport
+
+We have seen that the latitudinal temperature gradient generates a global circulation that transports heat from the equator to the poles. It is too computationally expensive to solve the governing equations here (General Circulation Models, or GCMs run ono supercomputers for days to solve the climate system). So we ca model
 """
 
 # ╔═╡ 567fa8d3-35b4-40d7-8404-ae78d2874380
@@ -801,7 +818,7 @@ G_\kappa = \frac{\kappa}{\cos{\phi_j}\Delta \phi} \left(\cos{\phi_{j+1/2}} \frac
 
 # ╔═╡ 930935f8-832a-45b4-8e5e-b194afa917c6
 begin 	
-	mutable struct OneDModel{S, T, K, E, A, F, C, ΦF, ΦC}
+	mutable struct DiffusiveModel{S, T, K, E, A, F, C, ΦF, ΦC}
 		stepper :: S
 		Tₛ :: T # surface temperature
 		Tₐ :: T # atmospheric temperature
@@ -816,25 +833,25 @@ begin
 		ϕᶜ :: ΦC # the latitudinal grid at center points
 	end
 
-	const ExplicitOneDModel   = OneDModel{<:ExplicitTimeStep}
-	const ImplicitOneDModel   = OneDModel{<:ImplicitTimeStep}
+	const ExplicitDiffusiveModel   = DiffusiveModel{<:ExplicitTimeStep}
+	const ImplicitDiffusiveModel   = DiffusiveModel{<:ImplicitTimeStep}
 
-	timestepping(model::ExplicitOneDModel) = "Explicit"
-	timestepping(model::ImplicitOneDModel) = "Implicit"
+	timestepping(model::ExplicitDiffusiveModel) = "Explicit"
+	timestepping(model::ImplicitDiffusiveModel) = "Implicit"
 
-	# We define a constructor for the OneDModel
-	function OneDModel(step, N; κ = 0.55, κₛ = κ, ε = 0.5, α = 0.2985, Q = 341.3)
+	# We define a constructor for the DiffusiveModel
+	function DiffusiveModel(step, N; κ = 0.55, κₛ = κ, ε = 0.5, α = 0.2985, Q = 341.3)
 		Cₛ = 1000.0 * 4182.0 * 100 / (3600 * 24) # ρ * c * H / seconds_per_day
 		Cₐ = 1e5 / 10 * 1000 / (3600 * 24) 		 # Δp / g * c / seconds_per_day
 		ϕᶠ = range(-π/2, π/2, length=N+1)
 		ϕᶜ = 0.5 .* (ϕᶠ[2:end] .+ ϕᶠ[1:end-1])
 		Tₛ = 288.0 * ones(N)
 		Tₐ = 288.0 * ones(N)
-		return OneDModel(step, Tₛ, Tₐ, κₛ, κ, ε, α, Q, Cₛ, Cₐ, ϕᶠ, ϕᶜ)
+		return DiffusiveModel(step, Tₛ, Tₐ, κₛ, κ, ε, α, Q, Cₛ, Cₐ, ϕᶠ, ϕᶜ)
 	end
 
 	# A pretty show method that displays the model's parameters
-	function Base.show(io::IO, model::OneDModel)
+	function Base.show(io::IO, model::DiffusiveModel)
 		print(io, "One-D energy budget model with:", '\n',
 		"├── time stepping: $(timestepping(model))", '\n',
     	"├── ε: $(emissivity(model))", '\n',
@@ -844,17 +861,17 @@ begin
 	end
 
 	# We define, again, the emissivities and albedo as function of the model
-	emissivity(model::OneDModel) = model.ε
-	emissivity(model::OneDModel{<:Any, <:Any, <:Any, <:Function}) = model.ε(model)
+	emissivity(model::DiffusiveModel) = model.ε
+	emissivity(model::DiffusiveModel{<:Any, <:Any, <:Any, <:Function}) = model.ε(model)
 
-	albedo(model::OneDModel) = model.α
-	albedo(model::OneDModel{<:Any, <:Any, <:Any, <:Any, <:Function}) = model.α(model)
+	albedo(model::DiffusiveModel) = model.α
+	albedo(model::DiffusiveModel{<:Any, <:Any, <:Any, <:Any, <:Function}) = model.α(model)
 end
 
 # ╔═╡ a93c36c9-b687-44b9-b0b6-5fe636ab061c
 # Remember that our temperature can be a scalar or a vector, 
 # depending on the latitude given to construct the model
-function time_step!(model::ExplicitZeroDModel, Δt)
+function time_step!(model::ExplicitRadiativeModel, Δt)
 	# Temperatures at time step n
 	Tₛ = model.Tₛ
 	Tₐ = model.Tₐ
@@ -907,7 +924,7 @@ function construct_matrix(model, Δt)
 end
 
 # ╔═╡ 97e1ce89-f796-4bd1-8e82-94fc838829a6
-function time_step!(model::ImplicitZeroDModel, Δt)
+function time_step!(model::ImplicitRadiativeModel, Δt)
 	# Construct the LHS matrix
 	A = construct_matrix(model, Δt)
 
@@ -930,7 +947,7 @@ function time_step!(model::ImplicitZeroDModel, Δt)
 end
 
 # ╔═╡ abdbbcaa-3a76-4a47-824d-6da73bc71c31
-test_1D_model = OneDModel(ImplicitTimeStep(), 90)
+test_1D_model = DiffusiveModel(ImplicitTimeStep(), 90)
 
 # ╔═╡ 1cef338d-5c4a-4ea5-98d7-9ac4f11922f3
 md"""
@@ -973,7 +990,7 @@ begin
 		return Gₛ, Gₐ
 	end
 
-	function time_step!(model::ExplicitOneDModel, Δt)
+	function time_step!(model::ExplicitDiffusiveModel, Δt)
 
 		Gₛ, Gₐ = tendencies(model)
 	
@@ -1057,7 +1074,7 @@ Last thing to do is calculate the rhs and solve the linear system
 """
 
 # ╔═╡ 9a5ac384-f5e6-41b0-8bc4-44e2ed6be472
-function time_step!(model::ImplicitOneDModel, Δt)
+function time_step!(model::ImplicitDiffusiveModel, Δt)
 	
 	A = construct_diffusion_matrix(model, Δt)
 	α = albedo(model)
@@ -1081,8 +1098,8 @@ begin
 	function compare_methods!(ε, α, ϕ, Δt)
 
 		# Construct the two models
-		model_explicit = ZeroDModel(ExplicitTimeStep(); α, ε, ϕ)
-		model_implicit = ZeroDModel(ImplicitTimeStep(); α, ε, ϕ)
+		model_explicit = RadiativeModel(ExplicitTimeStep(); α, ε, ϕ)
+		model_implicit = RadiativeModel(ImplicitTimeStep(); α, ε, ϕ)
 
 		# Time stepping parameters
 		stop_year = 50
@@ -1142,7 +1159,7 @@ begin
 	T_eq  = latitude_dependent_equilibrium_temperature.(ϕ, Ref(ε), Ref(0.2985));
 
 	# construct and evolve a zero d model with constant ε
-	model_lat = ZeroDModel(; ε, ϕ)
+	model_lat = RadiativeModel(; ε, ϕ)
 	evolve_model!(model_lat, Δt = 50, stop_year = 50);
 
 	# plot the latitudinal dependent temperatures
@@ -1178,7 +1195,7 @@ begin
 	ASR(model) = @. (1 - albedo(model)) * model.Q
 	```
 	$(current_figure())
-	**Figure**: comparison between ASR used to force the ZeroDModel and the observed ASR (from [NCEP reanalysis](https://psl.noaa.gov/data/gridded/data.ncep.reanalysis.html))
+	**Figure**: comparison between ASR used to force the RadiativeModel and the observed ASR (from [NCEP reanalysis](https://psl.noaa.gov/data/gridded/data.ncep.reanalysis.html))
 
 	The ASR seems lower at the poles, suggesting that the albedo is higher in those regions. This is a result of the lower sun angle present at the poles but also, the higher presence of fresh snow, ice, and smooth open water- all areas prone to high levels of reflectivity
 	
@@ -1197,9 +1214,9 @@ begin
 	```
 	varε(model) = ε₀ + ε₁ * log2(440.0/280) + ε₂ * (model.Tₛ - 286.38)
 	```
-	We that have to dispatch the emissivity function to behave in a different way when the ε field of our ZeroDModel is a function	
+	We that have to dispatch the emissivity function to behave in a different way when the ε field of our RadiativeModel is a function	
 	```
-	emissivity(model::ZeroDModel{<:Any, <:Any, <:Function}) = model.ε(model)
+	emissivity(model::RadiativeModel{<:Any, <:Any, <:Function}) = model.ε(model)
 	```
 	Note! Physical values of emissivity range between 0 and 1!
 	"""
@@ -1221,8 +1238,8 @@ end
 
 # ╔═╡ 4640a179-3373-4901-ac31-31022e8c7eb2
 begin
-	feedback_model  = ZeroDModel(; ε = varε, α = varα, ϕ)
-	reference_model = ZeroDModel(; ε = 0.8, ϕ)
+	feedback_model  = RadiativeModel(; ε = varε, α = varα, ϕ)
+	reference_model = RadiativeModel(; ε = 0.8, ϕ)
 
 	evolve_model!(feedback_model,  Δt = 50, stop_year = 50)
 	evolve_model!(reference_model, Δt = 50, stop_year = 50);
@@ -1262,11 +1279,6 @@ begin
 
 	$(current_figure())
 	**Figure**: comparison between observed temperature (dashed-dotted line), temperature calculated from a model with constant ``\varepsilon`` and ``\alpha`` (red) and from a model with latitude-dependent ``\alpha`` and water vapor feedback (blue)
-
-	**try it for yourself!** \
-	Add another atmospheric layer (as to have ``T_{a1}`` and ``T_{a2}``). \
-	How do the equations change? \
-	(Assume the two layers have emissivities ``\varepsilon_1`` and ``\varepsilon_2`` where ``\varepsilon_1 < \varepsilon_2``)
 
 	The prediction worsens when compared to the simple constant emissivity/constant albedo model. This is usually a sign that we are neglecting some important physical phenomenon.
 	"""
@@ -1314,7 +1326,7 @@ md""" κ $(@bind κ_slider PlutoUI.Slider(0:0.01:1, show_value=true)) """
 begin
 	F = annual_mean_insolation.(ϕ)
 
-	model_1D = OneDModel(ImplicitTimeStep(), length(F); κ = κ_slider, ε = varε, α = varα, Q = F)
+	model_1D = DiffusiveModel(ImplicitTimeStep(), length(F); κ = κ_slider, ε = varε, α = varα, Q = F)
 	
 	evolve_model!(model_1D, Δt = 50, stop_year = 50)
 	
@@ -1459,7 +1471,7 @@ where ``\alpha(\phi)`` is our previously defined array `varα`, ``T_{ice} = -10`
 # 	κ = 0.5
 # 	α_model(model) = α_feedback.(model.Tₛ, varα)
 
-# 	current_climate_model = OneDModel(ImplicitTimeStep(), length(F); κ, ε = varε, α = α_model, Q = F)
+# 	current_climate_model = DiffusiveModel(ImplicitTimeStep(), length(F); κ, ε = varε, α = α_model, Q = F)
 
 # 	current_climate_model.Tₛ .= model_1D.Tₛ
 # 	current_climate_model.Tₐ .= model_1D.Tₐ
@@ -1513,7 +1525,7 @@ Let's define an **ice_line** function retreives this latitude
 # 		ice_line_model = zeros(length(forcing))
 # 		for (idx, S₀) in enumerate(forcing)
 # 			F₂ = annual_mean_insolation.(ϕ; S₀)
-# 			model_tmp = OneDModel(ImplicitTimeStep(), length(F₂); κ, ε = varε, α = α_model, Q = F₂)
+# 			model_tmp = DiffusiveModel(ImplicitTimeStep(), length(F₂); κ, ε = varε, α = α_model, Q = F₂)
 	
 # 			model_tmp.Tₛ .= initial_condition_model.Tₛ
 # 			model_tmp.Tₐ .= initial_condition_model.Tₐ
@@ -1547,10 +1559,10 @@ Let's start from another initial condition
 # ╔═╡ 2b33a8a1-3772-4fb3-a914-a20a7aae91bc
 # begin
 # 	low_F = annual_mean_insolation.(ϕ; S₀ = S₀₁[1])
-# 	cold_climate_model = OneDModel(ImplicitTimeStep(), length(low_F); κ, ε = varε, α = α_model, Q = low_F)
+# 	cold_climate_model = DiffusiveModel(ImplicitTimeStep(), length(low_F); κ, ε = varε, α = α_model, Q = low_F)
 # 	evolve_model!(cold_climate_model, Δt = 100, stop_year = 100)
 
-# 	new_current_climate_model = OneDModel(ImplicitTimeStep(), length(low_F); κ, ε = varε, α = α_model, Q = F)
+# 	new_current_climate_model = DiffusiveModel(ImplicitTimeStep(), length(low_F); κ, ε = varε, α = α_model, Q = F)
 # 	new_current_climate_model.Tₛ .= cold_climate_model.Tₛ
 # 	new_current_climate_model.Tₐ .= cold_climate_model.Tₐ
 	
@@ -2961,11 +2973,11 @@ version = "3.5.0+0"
 # ╔═╡ Cell order:
 # ╟─d8e3d937-bcda-4c84-b543-e1324f696bbc
 # ╟─8ef88534-dac4-4a62-b623-dcaf63482a96
-# ╠═cfb8f979-37ca-40ab-8d3c-0053911717e7
+# ╟─cfb8f979-37ca-40ab-8d3c-0053911717e7
 # ╟─eb95e773-b12a-40a4-a4f1-9dced86fc8a2
 # ╟─75cacd05-c9f8-44ba-a0ce-8cde93fc8b85
 # ╠═18ddf155-f9bc-4e5b-97dc-762fa83c9931
-# ╠═87fdc7c2-536e-4aa1-9f68-8aec4bc7069d
+# ╟─87fdc7c2-536e-4aa1-9f68-8aec4bc7069d
 # ╟─8d4d8b93-ebfe-41ff-8b9e-f8931a9e83c2
 # ╟─25223f7b-22f7-46c2-9270-4430eb6c186e
 # ╟─034fc483-b188-4b2a-891a-61b76c74072d
