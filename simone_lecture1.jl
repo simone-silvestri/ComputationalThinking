@@ -435,12 +435,12 @@ the only tricky part remaining is to construct the matrix \
 Since temperature can be vectors, we align them starting from the surface temperature and following with the atmospheric temperature. Let us imagine we have three different latitudes (−45,0,45) where subscript refers to ``\phi = -45``, while 2 and 3 to ``0`` and ``45``. We can arrange our matrix in the following way
 ```math
   \begin{bmatrix}
-    {D_a}_{1} & & & {d_s}_1 & &\\
-    & {D_a}_{2} & & & {d_s}_2 & \\
-	& & {D_a}_{3}  & & & {d_s}_2 \\
-	{d_a}_1 & & & {D_s}_{1} & & \\
-    & {d_a}_2 & & & {D_s}_{2} & \\
-    & & {d_a}_3 & & & {D_s}_{3}  \\
+    {D_a}_{1} & & & {d_a}_1 & &\\
+    & {D_a}_{2} & & & {d_a}_2 & \\
+	& & {D_a}_{3}  & & & {d_a}_2 \\
+	{d_s}_1 & & & {D_s}_{1} & & \\
+    & {d_s}_2 & & & {D_s}_{2} & \\
+    & & {d_s}_3 & & & {D_s}_{3}  \\
   \end{bmatrix} \begin{bmatrix}
 {T_a}_1^{n+1} \\ {T_a}_2^{n+1} \\ {T_a}_3^{n+1} \\ {T_s}_1^{n+1} \\ {T_s}_2^{n+1} \\ {T_s}_3^{n+1}
 \end{bmatrix} = 
@@ -459,6 +459,8 @@ Implicit time stepping implies constructing the matrix, calculating the rhs and 
 
 # ╔═╡ 049e2164-24ac-467c-9d96-77510ac6ff57
 md"""
+### Model validation
+
 Let's verify that our model reaches equilibrium with both implicit and explicit time stepping.
 
 Some constants to be defined:
@@ -523,7 +525,7 @@ begin
 
 	# A constructor with some defaults...
 	function ZeroDModel(step = ImplicitTimeStep(); 
-						ε = 0.75, 
+						ε = 0.8, 
 					    α = 0.2985, 
 						ϕ = range(-89.0, 89.0,length=90))
 		N = length(ϕ)
@@ -572,7 +574,7 @@ end
 md"""
 ## Stability of time stepping methods
 
-Temperature starts oscillating and then explodes when using a large Δt, this is because of the intrinsic stability of the time stepping method. 
+Temperature starts oscillating and then explodes when using a large Δt, this is because of the intrinsic stability of the time stepping method. A method is considered _unstable_ when it leads to unbounded growth despite the stability of the underlying differential equation. 
 Let's analyze this by simplifying a bit our discretized atmospheric equation. We remove the coupling between the surface and the atmosphere. This is like saying that all of a sudden the atmosphere becomes transparent to the radiation coming from the earth (unlikely)
 ```math
 C_a \frac{T_a^{(n+1)} - T_a^{(n)}}{\Delta t} = -2\varepsilon \sigma T_a^4
@@ -871,6 +873,7 @@ end
 
 # ╔═╡ c0ff6c61-c4be-462b-a91c-0ee1395ef584
 function construct_matrix(model, Δt)
+	# Temperatures at time step n
 	Tₛ = model.Tₛ
 	Tₐ = model.Tₐ
 
@@ -880,39 +883,43 @@ function construct_matrix(model, Δt)
 	Cₐ = model.Cₐ
 	Cₛ = model.Cₛ
 
-	n = length(Tₛ)
-	m = 2 * n
-	A = zeros(m, m)
+	m = length(Tₛ)
 	
 	eₐ = @. Δt * σ * Tₐ^3 * ε
 	eₛ = @. Δt * σ * Tₛ^3
 
-	# We insert the diagonal
-	D = [(@. Cₐ + 2 * eₐ)..., (@. Cₛ + eₛ)...] 
+	# We build and insert the diagonal entries
+	Da = @. Cₐ + 2 * eₐ
+	Ds = @. Cₛ + eₛ
+	
+	D  = [Da..., Ds...] 
 
-	# the off-diagonal corresponding to the interexchange terms
-	da = @. -eₐ
-	ds = @. -ε*eₛ
-
+	# the off-diagonal entries corresponding to the interexchange terms
+	da = @. -ε * eₛ
+	ds = @. -eₐ
+	
 	# spdiagm(idx => vector) constructs a sparse matrix 
 	# with vector `vec` at the `idx`th diagonal 
 	A = spdiagm(0 => D,
-				n => [ds...],
-			   -n => [da...])
+				m => da,
+			   -m => ds)
 	return A
 end
 
 # ╔═╡ 97e1ce89-f796-4bd1-8e82-94fc838829a6
 function time_step!(model::ImplicitZeroDModel, Δt)
-	α = albedo(model)
+	# Construct the LHS matrix
 	A = construct_matrix(model, Δt)
-	
+
+	α = albedo(model)
+
+	# Calculate the RHS
 	rhsₐ = @. model.Cₐ * model.Tₐ
 	rhsₛ = @. model.Cₛ * model.Tₛ + Δt * (1 - α) * model.Q
 
 	rhs = [rhsₐ..., rhsₛ...]
 
-
+	# Solve the linear system
 	T = A \ rhs
 
 	nₐ = length(model.Tₐ)
@@ -1071,7 +1078,7 @@ end
 
 # ╔═╡ 00776863-2260-48a8-83c1-3f2696f11d96
 begin 
-	function compare_methods(ε, α, ϕ, Δt)
+	function compare_methods!(ε, α, ϕ, Δt)
 
 		# Construct the two models
 		model_explicit = ZeroDModel(ExplicitTimeStep(); α, ε, ϕ)
@@ -1080,10 +1087,12 @@ begin
 		# Time stepping parameters
 		stop_year = 50
 		nsteps = Int((stop_year * 365) ÷ Δt) # in Δt days
-	
+
+		# Vectors holding Tₛ(time)
 		T_explicit = zeros(nsteps)
 		T_implicit = zeros(nsteps)
-	
+
+		# Time step and save temperature information
 		@inbounds for step in 1:nsteps
 			time_step!(model_explicit, Δt)
 			time_step!(model_implicit, Δt)
@@ -1091,13 +1100,15 @@ begin
 			T_implicit[step] = model_implicit.Tₛ[1]
 		end
 
-		time_axis = (1:nsteps) .* (Δt / 365)
-	
+		# Calculate equilibrium temperature analytically
 		T_equilibrium = latitude_dependent_equilibrium_temperature(ϕ, ε, α) .* ones(nsteps)
 		T_reference   = latitude_dependent_equilibrium_temperature(45.0, 0.75, 0.3) .* ones(nsteps)
 
-		title = @sprintf("evolution of temperature at %d ᵒN, equilibrium T: %.2f ᵒC", values[3], T_equilibrium[end])
+		time_axis = (1:nsteps) .* (Δt / 365)
+		
+		title = @sprintf("final temperature at %d ᵒN: (T_eq, T_exp, T_imp) = (%.2f, %.2f, %.2f) ᵒC", ϕ, T_equilibrium[end], T_explicit[end], T_implicit[end])
 
+		# Plot the results
 		fig = Figure(resolution = (800, 300))
 		ax  = Axis(fig[1, 1]; title, ylabel = "Temperature [K]", xlabel = "time [yr]")
 		lines!(ax, time_axis, T_reference, color = :black, linewidth = 1, linestyle=:dash, label = "equilibrium at 45 ᵒN and ε = 0.75, α = 0.3")
@@ -1110,7 +1121,7 @@ begin
 		return fig
 	end
 
-	comparison = compare_methods(values[1], values[2], values[3], values[4])
+	compare_methods!(values[1], values[2], values[3], values[4])
 	current_figure()
 end
 
@@ -1138,7 +1149,7 @@ begin
 	plot_latitudinal_variables!(ϕ, [T_obs.-273.15, T_eq.-273.15, model_lat.Tₛ .- 273.15],
 								   ["observed T", "equilibrium T", "modelled T"],
 								   [:black, :green, :red], 
-								   [:dashdot, :solid, :solid]; ylims = (-60, 40), title = "emissivity: $ε");
+								   [:dashdot, :solid, :solid]; ylims = (-60, 50), title = "emissivity: $ε");
 	md""" 
 	$(current_figure())
 	**Figure**: Comparison between observed (dashed-dotted line) and temperature calculated by the model
@@ -2950,7 +2961,7 @@ version = "3.5.0+0"
 # ╔═╡ Cell order:
 # ╟─d8e3d937-bcda-4c84-b543-e1324f696bbc
 # ╟─8ef88534-dac4-4a62-b623-dcaf63482a96
-# ╟─cfb8f979-37ca-40ab-8d3c-0053911717e7
+# ╠═cfb8f979-37ca-40ab-8d3c-0053911717e7
 # ╟─eb95e773-b12a-40a4-a4f1-9dced86fc8a2
 # ╟─75cacd05-c9f8-44ba-a0ce-8cde93fc8b85
 # ╠═18ddf155-f9bc-4e5b-97dc-762fa83c9931
@@ -2972,7 +2983,7 @@ version = "3.5.0+0"
 # ╟─049e2164-24ac-467c-9d96-77510ac6ff57
 # ╠═f07006ac-c773-4829-9a38-6f9991403386
 # ╟─b85fdf41-ef8f-4314-bc3c-383947b9f02c
-# ╟─00776863-2260-48a8-83c1-3f2696f11d96
+# ╠═00776863-2260-48a8-83c1-3f2696f11d96
 # ╟─16ca594c-c9db-4528-aa65-bab12cb6e22a
 # ╟─ea517bbf-eb14-4d72-a4f4-9bb823e02f88
 # ╟─b65e2af0-9a08-4915-834b-1a20b2440891
@@ -2991,7 +3002,7 @@ version = "3.5.0+0"
 # ╟─8f21fc70-e369-4938-b0c2-5a4fbae71713
 # ╟─901548f8-a6c9-48f8-9c8f-887500081316
 # ╟─567fa8d3-35b4-40d7-8404-ae78d2874380
-# ╠═0d8fffdc-a9f5-4d82-84ec-0f27acc04c21
+# ╟─0d8fffdc-a9f5-4d82-84ec-0f27acc04c21
 # ╠═930935f8-832a-45b4-8e5e-b194afa917c6
 # ╠═abdbbcaa-3a76-4a47-824d-6da73bc71c31
 # ╟─1cef338d-5c4a-4ea5-98d7-9ac4f11922f3
