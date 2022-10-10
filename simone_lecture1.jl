@@ -66,7 +66,17 @@ end
 md"""
 # Section 2.3: a latitude-dependent climate
 
-In section 2.1 you have seen your first climate model, a system of equations that predicts the earth's average surface temperature depending on the sun's forcing and the level of absorption from the atmosphere. 
+##### What is a climate model?
+
+A climate model is a complex PDE solver that solves a set of differential equations on a discretized version of the earth, with land, ocean, and atmosphere discretized on a three-dimensional grid. The equations usually ensure the conservation of mass, momentum, and energy.
+
+$(Resource("https://d32ogoqmya1dw8.cloudfront.net/images/eet/envisioningclimatechange/gcm_grid_graphic.jpg", :height => 400))
+
+**Figure**: schematic depicting the discretization in a general circulation model (GCM) \
+Climate models are usually massive, sophisticated models which require years to develop and have to run on high-performance computing centers.
+
+##### Improving our first climate model
+In section 2.1 you have seen your first climate model, a system of equations that predicts the earth's average surface temperature depending on the sun's forcing and the absorption of the atmosphere. 
 
 ```math
 \begin{align}
@@ -75,9 +85,10 @@ C_s \frac{d T_s}{dt} & = \varepsilon \sigma T_a^4 - \sigma T_s ^4 + (1 - \alpha)
 \end{align}
 ```
 
-This simple model is handy for predicting global heating and cooling but does not bring us much further.
+$(Resource("https://www.acs.org/content/acs/en/climatescience/atmosphericwarming/singlelayermodel/_jcr_content/articleContent/columnbootstrap_2/column0/image.img.jpg/1374081917968.jpg", :height => 300))
+**Figure**: Earth's energy budget
 
-In particular, an essential quantity we are interested in predicting is the temperature difference between low and high latitudes. The latitudinal temperature gradient is a significant quantity that drives motions in the atmosphere and is the cause of all major climatic events. We will also later see that the latitudinal temperature gradient is one measure of the efficiency of the global climate system in redistributing heat and is used to test the ability of models to represent the climate system through time
+This simple model is handy for predicting global heating and cooling but does not bring us much further. In order to characterize our climate, an essential quantity we are interested in predicting is the temperature difference between low and high latitudes. The latitudinal temperature gradient is a significant quantity that drives motions in the atmosphere and is the cause of all major climatic events. We will also later see that the latitudinal temperature gradient is one measure of the efficiency of the global climate system in redistributing heat and is used to test the ability of models to represent the climate system through time
 
 To improve our simple model, we will introduce an extra dimension, the latitude
 
@@ -140,6 +151,9 @@ $(Resource("https://ars.els-cdn.com/content/image/3-s2.0-B9780080247441500061-f0
 # ╔═╡ 75cacd05-c9f8-44ba-a0ce-8cde93fc8b85
 md"""
 #### Bringing it all together
+
+$(Resource("https://raw.githubusercontent.com/simone-silvestri/ComputationalThinking/main/angles.png", :height => 300))
+**Figure:** Angles that define solar flux with respect to earth)
 
 We model the instantaneous solar flux with
 ```math
@@ -469,7 +483,7 @@ Implicit time stepping implies constructing the matrix, calculating the rhs and 
 
 # ╔═╡ 049e2164-24ac-467c-9d96-77510ac6ff57
 md"""
-### Model validation
+### Model verification
 
 Let's verify that our model reaches equilibrium with both implicit and explicit time stepping.
 
@@ -714,20 +728,15 @@ Hot air in the equator rises upwards and moves towards the pole. It cools down i
 $(Resource("https://tdgil.com/wp-content/uploads/2020/04/Hadley-Cells-and-Wind-Directions.jpg", :height => 500))
 **Figure**: schematic depicting the global atmospheric circulation
 
-To solve global circulation, we need to solve a complex system of partial differential equations on the sphere. These equations are named Navier-Stokes equations after the physicists that developed them and ensure the conservation of mass, momentum, and energy.
+Global circulation requires the solution of a complex system of partial differential equations on the sphere. These equations (named Navier-Stokes equations) the conservation of mass, momentum, and energy in the climate system.
 ```math
 \begin{align}
  & \frac{\partial\boldsymbol{\rho u}}{\partial t} + \boldsymbol{\nabla} \cdot (\rho \boldsymbol{u} \otimes \boldsymbol{u}) + f\widehat{\boldsymbol{z}} \times \boldsymbol{u} = - \boldsymbol{\nabla} p + \rho \boldsymbol{g} + \nabla \cdot \boldsymbol{\tau} \\
-& \frac{\partial \rho e}{\partial t} + \boldsymbol{\nabla}\cdot (\boldsymbol{u} (e - p)) =  \boldsymbol{\nabla} \cdot (\kappa \boldsymbol{\nabla} T) \\
+& \frac{\partial \rho e}{\partial t} + \boldsymbol{\nabla}\cdot (\boldsymbol{u} (e - p)) =  \boldsymbol{\nabla} \cdot (\kappa \boldsymbol{\nabla} T) + Q_{sun} - \varepsilon \sigma T^4 \\
 & \frac{\partial \rho}{\partial t} + \boldsymbol{\nabla} \cdot (\rho \boldsymbol{u}) = 0 \\
 \end{align}
 ```
 complemented by an equation of state (usually ideal gas) in the form ``p = EOS(\rho, e)``. General Circulation Models (or GCMs) solve this system of equations on a discrete three-dimensional grid to provide velocities and temperatures on the surface and in the atmosphere.
-
-$(Resource("https://d32ogoqmya1dw8.cloudfront.net/images/eet/envisioningclimatechange/gcm_grid_graphic.jpg", :height => 300))
-
-**Figure**: schematic depicting the discretization in a GCM \
-GCMs are usually massive, sophisticated models which require years to develop and have to run on high-performance computing centers.
 """
 
 # ╔═╡ 901548f8-a6c9-48f8-9c8f-887500081316
@@ -1209,7 +1218,7 @@ begin
 	```math
 	\varepsilon = \varepsilon_0 + \varepsilon_1 \log{\frac{\text{CO}_2}{{\text{CO}_2}_{\text{PRE}}}} + \varepsilon_2(T-T_{\text{PRE}})
 	```
-	Where the subscript ``\text{PRE}`` indicates pre-industrial values. Remember! The temperature in the above formula is the _surface_ temperature. 
+	Where the subscript ``\text{PRE}`` indicates pre-industrial values. Remember! The temperature in the above formula is the _surface_ temperature. The effect of water vapor is not hugely important in the climate change context, as the vapor pressure of H₂O is capped by the saturation pressure, but is of great importance in shaping the latitudinal temperature profile (it is much colder in the poles that in the equator).
 	To allow a temperature-dependent emissivity, we have to extend the ```emissivity``` method to ensure it can accept functions. We can define a function that accepts the model as an input and returns the temperature-dependent emissivity and use it as an input to our model
 	```
 	varε(model) = ε₀ + ε₁ * log2(440.0/280) + ε₂ * (model.Tₛ - 286.38)
@@ -1310,7 +1319,7 @@ begin
 	$(current_figure())
 	**Figure**: comparison between observed and calculated ASR and OLR
 
-	The OLR and ASR from our model match quite closely. This is expected: since every latitude in our model is independent the incoming energy (ASR) must match the outgoing energy (OLR) for energy conservation to hold. This is not the case for the observed profiles. We see that at the equator the incoming energy is larger than the emission and vice-versa happens at the poles. This is an indication that, in the real climate system, energy is transported from the equator to the poles. The mechanism that allows this heat transport is the presence of a global atmospheric circulation. 
+	The OLR and ASR from our model match quite closely. This is expected: since every latitude in our model is independent, the incoming energy (ASR) must match the outgoing energy (OLR) for energy conservation to hold. This is not the case for the observed profiles. We see that at the equator the incoming energy is larger than the emission and vice-versa happens at the poles. This is an indication that, in the real climate system, energy is transported from the equator to the poles. The mechanism that allows this heat transport is the presence of a global atmospheric circulation. 
 	"""
 end
 
@@ -2975,7 +2984,7 @@ version = "3.5.0+0"
 # ╟─8ef88534-dac4-4a62-b623-dcaf63482a96
 # ╟─cfb8f979-37ca-40ab-8d3c-0053911717e7
 # ╟─eb95e773-b12a-40a4-a4f1-9dced86fc8a2
-# ╠═75cacd05-c9f8-44ba-a0ce-8cde93fc8b85
+# ╟─75cacd05-c9f8-44ba-a0ce-8cde93fc8b85
 # ╠═18ddf155-f9bc-4e5b-97dc-762fa83c9931
 # ╟─87fdc7c2-536e-4aa1-9f68-8aec4bc7069d
 # ╟─8d4d8b93-ebfe-41ff-8b9e-f8931a9e83c2
