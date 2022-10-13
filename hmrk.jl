@@ -28,14 +28,14 @@ function annual_average_insolation(ϕ; S₀ = 1356.2)
     return Q
 end
 
-mutable struct DiffusiveModel{S, T, K, E, A, B, F, C, ΦF, ΦC}
+mutable struct DiffusiveModel{S, T, K, E1, E2, A, B, F, C, ΦF, ΦC}
     stepper :: S
     Tₒ :: T # surface temperature
     Tₐ :: T # troposhere temperature
     Tₛ :: T # stratosphere temperature
     κ  :: K # diffusivity
-    εₐ :: E # troposphere emissivity
-    εₛ  :: E # stratosphere emissivity
+    εₐ :: E1 # troposphere emissivity
+    εₛ  :: E2 # stratosphere emissivity
     α  :: A # surface albedo
     β  :: B # stratosphere absorptivity of shortwave radiation
     Q  :: F # forcing
@@ -49,8 +49,8 @@ end
 struct ExplicitTimeStep end
 struct ImplicitTimeStep end
 
-const ExplicitDiffusiveModel   = DiffusiveModel{<:ExplicitTimeStep}
-const ImplicitDiffusiveModel   = DiffusiveModel{<:ImplicitTimeStep}
+ExplicitDiffusiveModel   = DiffusiveModel{<:ExplicitTimeStep}
+ImplicitDiffusiveModel   = DiffusiveModel{<:ImplicitTimeStep}
 
 timestepping(model::ExplicitDiffusiveModel) = "Explicit"
 timestepping(model::ImplicitDiffusiveModel) = "Implicit"
@@ -82,7 +82,9 @@ end
 
 # We define, again, the emissivities and albedo as function of the model
 albedo(model::DiffusiveModel) = model.α
-albedo(model::DiffusiveModel{<:Any, <:Any, <:Any, <:Any, <:Function}) = model.α(model)
+
+troposphere_emissivity(model::DiffusiveModel) = model.εₐ
+troposphere_emissivity(model::DiffusiveModel{<:Any, <:Any, <:Any, <:Function}) = model.εₐ(model)
 
 function construct_matrix(model, Δt)
 	# Temperatures at time step n
@@ -90,7 +92,7 @@ function construct_matrix(model, Δt)
 	Tₐ = model.Tₐ
 	Tₛ = model.Tₛ
 
-	εₐ = model.εₐ
+	εₐ = troposphere_emissivity(model)
 	εₛ = model.εₛ
 
 	Cₒ = model.Cₒ
@@ -199,6 +201,18 @@ end
 ϵₜᵣₒ = 0.55 # Pre Industrial tropospheric emissivity in the longwave range
 βₛₜᵣ = 0.05 # Pre Industrial  stratospheric emissivity in the shortwave range
 
-model = DiffusiveModel(ImplicitTimeStep(), 90; κ = 0.5, εₐ = ϵₜᵣₒ, εₛ = ϵₛₜᵣ, β = βₛₜᵣ, Q = annual_average_insolation.(ϕ))
+a₀ = 0.312
+a₁ = 0.15 
+varα = @. a₀ + a₁ .* 0.5 * (3 * sind(ϕ)^2 .- 1)
+
+# variable emissivity (function that depends on the model state)
+ε₀, ε₁, ε₂ = (ϵₜᵣₒ, 0.02, 0.005)
+function varε(model) 
+	return @. min(max(ε₀ + ε₁ * log2(440.0/280) + ε₂ * (model.Tₛ - 286.38), 0), 1.0)
+end
+
+βₛₜᵣ = 0.05 # Pre Industrial  stratospheric emissivity in the shortwave range
+
+model = DiffusiveModel(ImplicitTimeStep(), 90; κ = 0.5, α = varα, εₐ = varε , εₛ = ϵₛₜᵣ, β = βₛₜᵣ, Q = annual_average_insolation.(ϕ))
 
 
