@@ -497,13 +497,13 @@ Note that we need the heat capacity in those units to be able to time step in [d
 # ╔═╡ f07006ac-c773-4829-9a38-6f9991403386
 begin
 	const σ  = 5.67e-8	
-	const Cₛ = 1000.0 * 4186.0 * 100 / (3600 * 24) #  ρ * c * H / seconds_per_day
+	const Cₛ = 1000.0 * 4000.0 * 100 / (3600 * 24) #  ρ * c * H / seconds_per_day
 	const Cₐ = 1e5 / 10 * 1000 / (3600 * 24)       # Δp / g * c / seconds_per_day
 end
 
 # ╔═╡ 039ec632-d238-4e63-81fc-a3225ccd2aee
-latitude_dependent_equilibrium_temperature(lat, ε, α) =  
-                 (2 * annual_mean_insolation(lat) * (1 - α) / (2 - ε) / σ )^(1/4)
+latitude_dependent_equilibrium_temperature(lat, ε, α, atmos = 1) =  
+                 (2 * annual_mean_insolation(lat) * (1 - α) / (2 - ε) / σ / atmos)^(1/4)
 
 # ╔═╡ 1431b11f-7838-41da-92e3-bcca9f4215b3
 begin 
@@ -555,7 +555,7 @@ begin
 		N = length(ϕ)
 		Q = annual_mean_insolation.(ϕ)
 		Tₛ_init = 200.0 .* ones(N)
-		Tₐ_init = 180.0 .* ones(N)
+		Tₐ_init = 160.0 .* ones(N)
 
 		args = (Tₛ_init, Tₐ_init, ε, α, Q, Cₛ, Cₐ)
 		return RadiativeModel(step, args...)
@@ -692,7 +692,7 @@ begin
 	dh = DataDep("computional_thinking_data",
 	    "Data for class",
 	    [online_path * "observed_radiation.jld2",   # Observed ASR and OLR (absorbed shortwave and outgoing longwave radiation)
-	     online_path * "observed_T.jld2"]
+	     online_path * "observed_T.jld2"] 		    # Observed temperature
 		)
 
 	DataDeps.register(dh)
@@ -711,8 +711,170 @@ md""" ε $(@bind ε PlutoUI.Slider(0:0.01:1, show_value=true, default = 0.0)) ""
 
 # ╔═╡ 6ce47d90-d5a2-43c0-ad64-27c13aa0f5db
 # RadiativeModel has parametric types {S, T, E, A, F, C} where the third one (E) 
-# corresponds to theemissivity
+# corresponds to the emissivity
 emissivity(model::RadiativeModel{<:Any, <:Any, <:Function}) = model.ε(model)
+
+# ╔═╡ 901548f8-a6c9-48f8-9c8f-887500081316
+md"""
+# Section 2.4: Heat transport
+
+We have seen that the latitudinal temperature gradient generates a global circulation that transports heat from the equator to the poles. It is too computationally expensive to solve the governing equations here (General Circulation Models, or GCMs run ono supercomputers for days to solve the climate system). So we have to model our latitudinal transport in an easier way
+"""
+
+# ╔═╡ 590c1026-8e82-4dc7-a07b-6f3b96fbc0ee
+md"""
+### Global atmospheric circulation
+
+There are three main factors that we have to take into account when considering large scale atmospheric circulation:
+- hot air rises
+- cold air sinks
+- Coriolis force pushes winds to the right in the upper hemisphere and to the left in the lower hemisphere
+
+Hot air in the equator rises upwards and moves towards the pole. It cools down in the process and about 30ᵒ it starts to sink creating large circulation cells called Hadley cells. At the poles, cold dense air tends to sink and move down towards the equator, creating the Polar pressure cells. While moving toward the equator, the air coming from the pole encounters faster spinning latitudes and is, therefore, diverted by the Coriolis effect. In between these two major cells, we form strong winds which are diverted towards the east (westerlies)
+
+$(Resource("https://tdgil.com/wp-content/uploads/2020/04/Hadley-Cells-and-Wind-Directions.jpg", :height => 500))
+**Figure**: schematic depicting the global atmospheric circulation
+
+Global circulation requires the solution of a complex system of partial differential equations on the sphere. These equations (named Navier-Stokes equations) the conservation of mass, momentum, and energy in the climate system.
+```math
+\begin{align}
+ & \frac{\partial\boldsymbol{u}}{\partial t} + (\boldsymbol{u} \cdot \boldsymbol{\nabla})\boldsymbol{u} + f\widehat{\boldsymbol{z}} \times \boldsymbol{u} = - \frac{\boldsymbol{\nabla} p}{\rho} + \boldsymbol{\nabla}\Phi \\
+& \frac{\partial T}{\partial t} +  \boldsymbol{u} \cdot \boldsymbol{\nabla} T = R_{in} - R_{out}(T^4) \\
+& \frac{\partial \rho}{\partial t} + \boldsymbol{\nabla} \cdot (\rho \boldsymbol{u}) = 0 \\
+\end{align}
+```
+complemented by an equation of state (usually ideal gas) in the form ``p = EOS(\rho, T)``. General Circulation Models (or GCMs) solve this system of equations on a discrete three-dimensional grid to provide velocities and temperatures on the surface and in the atmosphere.
+"""
+
+# ╔═╡ 567fa8d3-35b4-40d7-8404-ae78d2874380
+md"""
+## Modeling latitudinal transport
+what do we have to add to our model to include atmospheric circulation?
+
+```math
+\begin{align}
+C_a \frac{dT_a}{dt} & = \varepsilon \sigma T_s^4 - 2\varepsilon \sigma T_a^4 + \tau_a \\
+C_s \frac{dT_s}{dt} & =  \varepsilon \sigma T_a^4 - \sigma T_s^4 + (1 - \alpha) Q + \tau_s
+\end{align}
+```
+
+where ``\tau_a`` and ``\tau_s`` represent the source/sink caused by heat transported around by currents in the atmosphere and in the ocean.
+
+How can we calculate these additional terms?
+
+$(Resource("https://raw.githubusercontent.com/simone-silvestri/ComputationalThinking/main/schematic.png", :height => 400))
+**Figure**: energy fluxes in our control volume.
+
+In our control volume we have a flux in ``F^+`` and a flux out ``F^-``
+The energy stored in out control volume (``\tau``) will be the difference of the fluxes divided by the surface are of the control volume, where
+```math
+A = \underbrace{2\pi R \cos{\phi}}_{\text{circumference}} \cdot \underbrace{R\Delta \phi}_{\text{width}}
+```
+So 
+```math
+\tau = - \frac{1}{2\pi R^2 \cos{\phi}} \frac{F^- - F^+}{\Delta \phi}
+```
+taking ``\Delta \phi \rightarrow 0``
+```math
+\tau = - \frac{1}{2\pi R^2 \cos{\phi}} \frac{\partial F}{\partial \phi}
+```
+
+How can we represent ``F``? 
+Mathematically, the flux at the boundary of a computational element is calculated as ``(V\cdot T)``. The velocity ``V`` is the flow velocity at the interface of the element, which is determined by the Navier-Stokes equations, 3-dimensional PDEs that ensure momentum conservation in fluid dynamic systems. These equations are notoriously hard to solve, they require very fine grids due to the chaotic nature of fluid flows. Therefore, we will take a shortcut and _parametrize_ the flux at the interface (i.e., approximate the flux with a semi-empirical model).
+We can think at the transport of heat by the atmosphere as moving heat from _HOT_ to _COLD_ regions of the earth. In general, this holds if we zoom out enough. We can think of the transport by the atmosphere as a diffusion process, which goes "DOWN" the gradient of temperature. As such we can parametrize the heat flux with an effective conductivity
+```math
+F \approx - 2\pi R^2 \cos{\phi} \cdot \kappa \frac{\partial T}{\partial \phi}
+```
+where ``\kappa`` is the "conductivity" of our climate system in W/(m²K) due to the movement in the atmosphere
+And, finally assuming that ``\kappa`` does not vary in latitude (very strong assumption!) we can model the heat source due to transport as
+```math
+\tau = \frac{\kappa}{\cos{\phi}} \frac{\partial}{\partial \phi} \left(\cos{\phi}  \frac{\partial T}{\partial \phi} \right)
+```
+
+NOTE: in a metal rod, where the area does not vary with length, the ``cos`` terms drop and a heat diffusion can be modelled with just
+```math
+\tau \approx D \frac{\partial^2 T}{\partial x^2}
+```
+"""
+
+# ╔═╡ 0d8fffdc-a9f5-4d82-84ec-0f27acc04c21
+md"""
+## Let's code it up!
+
+Our governing system of equation is now a system of PDE, so we have to discretize the ``\phi``-direction as well a the time.
+
+```math
+\begin{align}
+C_a \frac{\partial T_a}{\partial t} & = \sigma T_s^4 - 2\varepsilon \sigma T_a^4 + \frac{\kappa}{\cos{\phi}} \frac{\partial}{\partial \phi} \left(\cos{\phi}  \frac{\partial T_a}{\partial \phi} \right)\\
+C_s \frac{\partial T_s}{\partial t} & = - \sigma T_s^4 + \varepsilon \sigma T_a^4 + (1 - \alpha) Q + \frac{\kappa}{\cos{\phi}} \frac{\partial}{\partial \phi} \left(\cos{\phi}  \frac{\partial T_s}{\partial \phi} \right)
+\end{align}
+```
+
+We need to define a ``\Delta x`` (or ``\Delta \phi`` in our case) and we can discretize a spatial derivative in the same way as the time-derivative
+```math
+\left[\frac{1}{\cos{\phi}} \frac{\partial}{\partial \phi} \left(\cos{\phi}  \frac{\partial T}{\partial \phi} \right) \right]_j \approx \frac{1}{\cos{\phi_j} \Delta \phi} \left(\left[ \cos{\phi} \frac{\partial T}{\partial \phi} \right]_{j+1/2} - \left[ \cos{\phi} \frac{\partial T}{\partial \phi} \right]_{j-1/2} \right)
+```
+In the same way we can approximate the first derivative on interfaces as
+```math
+\left[\cos{\phi}\frac{\partial T}{\partial \phi} \right]_{j+1/2} \approx \cos{\phi_{j+1/2}}\frac{T_{j+1} - T_{j}}{\Delta \phi}
+```
+The additional tendency term caused by heat transport becomes:
+```math
+G_\kappa = \frac{\kappa}{\cos{\phi_j}\Delta \phi} \left(\cos{\phi_{j+1/2}} \frac{T_{j+1} - T_j}{\Delta \phi} - \cos{\phi_{j-1/2}} \frac{T_{j} - T_{j-1}}{\Delta \phi} \right)
+```
+"""
+
+
+# ╔═╡ 930935f8-832a-45b4-8e5e-b194afa917c6
+begin 	
+	struct DiffusiveModel{S, T, K, E, A, F, C, ΦF, ΦC}
+		stepper :: S
+		Tₛ :: T # surface temperature
+		Tₐ :: T # atmospheric temperature
+		κ  :: K # thermal conductivity of the climate system
+		ε  :: E # atmospheric emissivity
+		α  :: A # surface albedo
+		Q  :: F # forcing
+		Cₛ :: C # surface heat capacity
+		Cₐ :: C # atmospheric heat capacity
+		ϕᶠ :: ΦF # the latitudinal grid at interface points
+		ϕᶜ :: ΦC # the latitudinal grid at center points
+	end
+
+	const ExplicitDiffusiveModel   = DiffusiveModel{<:ExplicitTimeStep}
+	const ImplicitDiffusiveModel   = DiffusiveModel{<:ImplicitTimeStep}
+
+	timestepping(model::ExplicitDiffusiveModel) = "Explicit"
+	timestepping(model::ImplicitDiffusiveModel) = "Implicit"
+
+	# We define a constructor for the DiffusiveModel
+	function DiffusiveModel(step, N; κ = 0.55, ε = 0.5, α = 0.2985, Q = 341.3)
+		Cₛ = 1000.0 * 4182.0 * 100 / (3600 * 24) # ρ * c * H / seconds_per_day
+		Cₐ = 1e5 / 10 * 1000 / (3600 * 24) 		 # Δp / g * c / seconds_per_day
+		ϕᶠ = range(-π/2, π/2, length=N+1)
+		ϕᶜ = 0.5 .* (ϕᶠ[2:end] .+ ϕᶠ[1:end-1])
+		Tₛ = 288.0 * ones(N)
+		Tₐ = 288.0 * ones(N)
+		return DiffusiveModel(step, Tₛ, Tₐ, κ, ε, α, Q, Cₛ, Cₐ, ϕᶠ, ϕᶜ)
+	end
+
+	# A pretty show method that displays the model's parameters
+	function Base.show(io::IO, model::DiffusiveModel)
+		print(io, "One-D energy budget model with:", '\n',
+		"├── time stepping: $(timestepping(model))", '\n',
+    	"├── ε: $(emissivity(model))", '\n',
+        "├── α: $(albedo(model))", '\n',
+        "├── κ: $(model.κ)", '\n',
+        "└── Q: $(model.Q) Wm⁻²")
+	end
+
+	# We define, again, the emissivities and albedo as function of the model
+	emissivity(model::DiffusiveModel) = model.ε
+	emissivity(model::DiffusiveModel{<:Any, <:Any, <:Any, <:Function}) = model.ε(model)
+
+	albedo(model::DiffusiveModel) = model.α
+	albedo(model::DiffusiveModel{<:Any, <:Any, <:Any, <:Any, <:Function}) = model.α(model)
+end
 
 # ╔═╡ a93c36c9-b687-44b9-b0b6-5fe636ab061c
 # Remember that our temperature can be a scalar or a vector, 
@@ -792,6 +954,153 @@ end
 	@inbounds @. model.Tₛ .= T[nₐ+1:nₐ+nₛ]
 end
 
+# ╔═╡ abdbbcaa-3a76-4a47-824d-6da73bc71c31
+test_1D_model = DiffusiveModel(ImplicitTimeStep(), 90)
+
+# ╔═╡ 1cef338d-5c4a-4ea5-98d7-9ac4f11922f3
+md"""
+### Coding explicit time stepping with diffusion
+
+Coding the explicit time stepping won't be too different than what we did with the ODE. \ 
+We define the tendencies and add the explicit diffusion term calculated as above. \
+This time we need boundary conditions for our PDE. 
+
+We assume that there are no fluxes over the poles.
+```math
+F^+(90^\circ) = F^-(-90^\circ) = 0
+```
+
+"""
+
+# ╔═╡ 71cff056-a36c-4fd4-babb-53018894ac5c
+begin
+	function explicit_diffusion(T, Δϕ, ϕᶠ, ϕᶜ)
+		# Calculate the flux at the interfaces
+		Flux = cos.(ϕᶠ[2:end-1]) .* (T[2:end] .- T[1:end-1]) ./ Δϕ
+		# add boundary conditions
+		# We impose 0-flux boundary conditions
+		Flux = [0.0, Flux..., 0.0]
+		return 1 ./ cos.(ϕᶜ) .* (Flux[2:end] .- Flux[1:end-1]) ./ Δϕ
+	end
+	
+	function tendencies(model)
+		Tₛ = model.Tₛ
+		Tₐ = model.Tₐ
+		α  = albedo(model)
+		ε  = emissivity(model)
+
+		Δϕ = model.ϕᶠ[2] - model.ϕᶠ[1]
+		Dₛ = model.κ .* explicit_diffusion(model.Tₛ, Δϕ, model.ϕᶠ, model.ϕᶜ)
+		Dₐ = model.κ .* explicit_diffusion(model.Tₐ, Δϕ, model.ϕᶠ, model.ϕᶜ)
+
+		Gₛ = @. (1 - α) * model.Q + σ * (ε * Tₐ^4 - Tₛ^4) + Dₛ
+		Gₐ = @. σ * ε * (Tₛ^4 - 2 * Tₐ^4) + Dₐ
+		return Gₛ, Gₐ
+	end
+
+	function time_step!(model::ExplicitDiffusiveModel, Δt)
+
+		Gₛ, Gₐ = tendencies(model)
+	
+		model.Tₛ .+= Δt * Gₛ / model.Cₛ
+		model.Tₐ .+= Δt * Gₐ / model.Cₐ
+	end
+end
+
+# ╔═╡ 83be4f9d-6c85-4e5b-9379-00618c9e39be
+md"""
+### Coding implicit time stepping with diffusion
+
+to code an implicit time stepping method, we can reutilize the matrix we used before (the sources and interexchange terms do not change)
+There are new terms to be added:
+
+```math
+G_\kappa^{(n+1)} = \frac{\kappa}{\cos{\phi_j}\Delta \phi} \left(\cos{\phi_{j+1/2}} \frac{T_{j+1}^{(n+1)} - T_j^{(n+1)}}{\Delta \phi} - \cos{\phi_{j-1/2}} \frac{T_{j}^{(n+1)} - T_{j-1}^{(n+1)}}{\Delta \phi} \right)
+```
+we can rearrange it as
+```math
+G_\kappa^{(n+1)} = \kappa\frac{\cos{\phi_{j-1/2}}}{\cos{\phi_j}\Delta\phi^2}  T_{j-1}^{(n+1)} + \kappa\frac{\cos{\phi_{j+1/2}}}{\cos{\phi_j}\Delta\phi^2}  T_{j+1}^{(n+1)} - \kappa\frac{\cos{\phi_{j+1/2}} + \cos{\phi_{j-1/2}}}{\cos{\phi_j}\Delta\phi^2} T_j^{(n+1)}
+```
+```math
+G_\kappa^{(n+1)} = a T_{j-1}^{(n+1)} + c T_{j+1}^{(n+1)} - (a+c) T_j^{(n+1)}
+```
+where 
+```math
+a = \kappa\frac{\cos{\phi_{j-1/2}}}{\cos{\phi_j}\Delta\phi^2} \ \ \ \text{and} \ \ \ c = \kappa\frac{\cos{\phi_{j+1/2}}}{\cos{\phi_j}\Delta\phi^2}
+```
+we have to add ``(a+c)`` to the diagonal, ``a`` to the diagonal at position ``-1`` and ``c`` to the diagonal at position ``+1``
+
+**_Adding boundary conditions_** \
+at ``j = 1/2`` we impose a no flux boundary condition. This implies that
+```math
+F_{1/2} = 0 \Rightarrow T_0 = T_1
+```
+then ``G_{\kappa}^{(n+1)}`` at 1 simplifies to
+```math
+\left[G_\kappa^{(n+1)}\right]_1 = c T_{2}^{(n+1)} - c T_1^{(n+1)}
+```
+Simply put, we avoid adding ``a`` to the first row. The same happens for ``G_{\kappa}^{(n+1)}`` at ``m`` (with ``m`` the length of ``\phi``) where, assuming that ``F_{m+1/2} = 0`` implies that
+```math
+\left[G_\kappa^{(n+1)}\right]_m = a T_{m-1}^{(n+1)} - a T_m^{(n+1)}
+```
+"""
+
+# ╔═╡ 7c7439f0-d678-4b68-a5e5-bee650fa17e2
+function construct_diffusion_matrix(model, Δt)
+
+	A = construct_matrix(model, Δt)
+	
+	cosϕᶜ = cos.(model.ϕᶜ)
+	Δϕ = model.ϕᶠ[2] - model.ϕᶠ[1]
+
+	a = @. model.κ / Δϕ^2 / cosϕᶜ * cos(model.ϕᶠ[1:end-1])
+	c = @. model.κ / Δϕ^2 / cosϕᶜ * cos(model.ϕᶠ[2:end])
+
+	m = length(model.Tₛ)
+    for i in 1:m
+		# Adding the off-diagonal entries corresponding to Tⱼ₊₁ (exclude the last row)
+        if i < m
+            A[i  , i+1]   = - Δt * c[i]
+            A[i+m, i+1+m] = - Δt * c[i]
+		end
+		# Adding the off-diagonal entries corresponding to Tⱼ₋₁ (exclude the first row)
+        if i > 1 
+            A[i,   i-1]   = - Δt * a[i]
+            A[i+m, i-1+m] = - Δt * a[i]
+        end
+		# Adding the diagonal entries
+        A[i  , i]   += Δt * (a[i] + c[i])
+        A[i+m, i+m] += Δt * (a[i] + c[i])
+    end
+	
+	return A
+end
+
+# ╔═╡ 57dde8ad-f7de-4ca6-bfab-235bc13131c0
+md"""
+Last thing to do is calculate the rhs and solve the linear system
+"""
+
+# ╔═╡ 9a5ac384-f5e6-41b0-8bc4-44e2ed6be472
+function time_step!(model::ImplicitDiffusiveModel, Δt)
+	
+	A = construct_diffusion_matrix(model, Δt)
+	α = albedo(model)
+
+	rhsₐ = model.Cₐ .* model.Tₐ
+	rhsₛ = model.Cₛ .* model.Tₛ .+ Δt .* (1 .- α) .* model.Q
+	
+	rhs = [rhsₐ..., rhsₛ...]
+
+	T = A \ rhs
+
+	nₐ = length(model.Tₐ)
+	nₛ = length(model.Tₛ)
+
+	model.Tₐ .= T[1:nₐ]
+	model.Tₛ .= T[nₐ+1:nₐ+nₛ]
+end
+
 # ╔═╡ 00776863-2260-48a8-83c1-3f2696f11d96
 begin 
 	function compare_methods!(ε, α, ϕ, Δt)
@@ -805,32 +1114,41 @@ begin
 		nsteps = Int((stop_year * 365) ÷ Δt) # in Δt days
 
 		# Vectors holding Tₛ(time)
-		T_explicit = zeros(nsteps)
-		T_implicit = zeros(nsteps)
+		Tₛ_explicit = zeros(nsteps)
+		Tₛ_implicit = zeros(nsteps)
 
+		# Vectors holding Tₐ(time)
+		Tₐ_explicit = zeros(nsteps)
+		Tₐ_implicit = zeros(nsteps)
+		
 		# Time step and save temperature information
 		@inbounds for step in 1:nsteps
 			time_step!(model_explicit, Δt)
 			time_step!(model_implicit, Δt)
-			T_explicit[step] = model_explicit.Tₛ[1]
-			T_implicit[step] = model_implicit.Tₛ[1]
+			Tₛ_explicit[step] = model_explicit.Tₛ[1]
+			Tₛ_implicit[step] = model_implicit.Tₛ[1]
+			Tₐ_explicit[step] = model_explicit.Tₐ[1]
+			Tₐ_implicit[step] = model_implicit.Tₐ[1]
 		end
 
 		# Calculate equilibrium temperature analytically
-		T_equilibrium = latitude_dependent_equilibrium_temperature(ϕ, ε, α) .* ones(nsteps)
-		T_reference   = latitude_dependent_equilibrium_temperature(45.0, 0.75, 0.3) .* ones(nsteps)
+		Tₛ_equilibrium = latitude_dependent_equilibrium_temperature(ϕ, ε, α) .* ones(nsteps)
+		Tₐ_equilibrium = latitude_dependent_equilibrium_temperature(ϕ, ε, α, 2) .* ones(nsteps)
 
 		time_axis = (1:nsteps) .* (Δt / 365)
 		
-		title = @sprintf("final temperature at %d ᵒN: (T_eq, T_exp, T_imp) = (%.2f, %.2f, %.2f) ᵒC", ϕ, T_equilibrium[end], T_explicit[end], T_implicit[end])
+		title = @sprintf("final temperature at %d ᵒN: (T_eq, T_exp, T_imp) = (%.2f, %.2f, %.2f) ᵒC", ϕ, Tₛ_equilibrium[end], Tₛ_explicit[end], Tₛ_implicit[end])
 
 		# Plot the results
 		fig = Figure(resolution = (800, 300))
 		ax  = Axis(fig[1, 1]; title, ylabel = "Temperature [K]", xlabel = "time [yr]")
-		lines!(ax, time_axis, T_reference, color = :black, linewidth = 1, linestyle=:dash, label = "equilibrium at 45 ᵒN and ε = 0.75, α = 0.3")
-		lines!(ax, time_axis, T_equilibrium, color = :red, linewidth = 1, linestyle=:dashdot, label = "equilibrium temperature")
-		lines!(ax, time_axis, T_explicit , color = :blue, linewidth = 2, label = "explicit time stepping")	
-		lines!(ax, time_axis, T_implicit , color = :green, linewidth = 2, label = "implicit time stepping")	
+		lines!(ax, time_axis, Tₐ_equilibrium, color = :black, linewidth = 1, linestyle=:dash, label = "Tₐ equilibrium")
+		lines!(ax, time_axis, Tₛ_equilibrium, color = :black, linewidth = 1, linestyle=:dash, label = "Tₛ equilibrium")
+		lines!(ax, time_axis, Tₛ_explicit , color = :blue, linewidth = 2, label = "explicit time stepping")	
+		lines!(ax, time_axis, Tₛ_implicit , color = :green, linewidth = 2, label = "implicit time stepping")	
+
+		lines!(ax, time_axis, Tₐ_explicit , color = :blue)	
+		lines!(ax, time_axis, Tₐ_implicit , color = :green)	
 
 		axislegend(ax, position = :rb, framevisible = false)
 
@@ -853,19 +1171,16 @@ end
 # ╠═╡ show_logs = false
 begin 
 	ϕ = range(-89, 89, length=90)
-	
-	# calculating the equilibrium temperature
-	T_eq  = latitude_dependent_equilibrium_temperature.(ϕ, Ref(ε), Ref(0.2985));
 
-	# construct and evolve a zero d model with constant ε
+	# construct and evolve a radiative model with constant ε
 	model_lat = RadiativeModel(; ε, ϕ)
 	evolve_model!(model_lat, Δt = 50, stop_year = 50);
 
 	# plot the latitudinal dependent temperatures
-	plot_latitudinal_variables!(ϕ, [T_obs.-273.15, T_eq.-273.15, model_lat.Tₛ .- 273.15],
-								   ["observed T", "equilibrium T", "modelled T"],
-								   [:black, :green, :red], 
-								   [:dashdot, :solid, :solid]; ylims = (-60, 50), title = "emissivity: $ε");
+	plot_latitudinal_variables!(ϕ, [T_obs.-273.15, model_lat.Tₛ .- 273.15],
+								   ["observed T", "modelled T"],
+								   [:black, :red], 
+								   [:dashdot, :solid]; ylims = (-60, 50), title = "emissivity: $ε");
 	md""" 
 	$(current_figure())
 	**Figure**: Comparison between observed (dashed-dotted line) and temperature calculated by the model
@@ -924,14 +1239,14 @@ end
 # ╔═╡ f2510e0a-23f2-4a40-a7db-7b59898facfa
 begin
 	# variable albedo
-	a₀ = 0.312
-	a₁ = 0.15 
-	varα = @. a₀ + a₁ .* 0.5 * (3 * sind(ϕ)^2 .- 1)
+	α₀ = 0.312
+	α₁ = 0.15 
+	varα = @. α₀ + α₁ .* 0.5 * (3 * sind(ϕ)^2 .- 1)
 
 	# variable emissivity (function that depends on the model state)
 	ε₀, ε₁, ε₂ = (0.75, 0.02, 0.005)
 	function varε(model) 
-		return @. min(max(ε₀ + ε₁ * log2(440.0/280) + ε₂ * (model.Tₛ - 286.38), 0), 1.0)
+		return @. clamp(ε₀ + ε₁ * log2(430.0/280) + ε₂ * (model.Tₛ - 286.38), 0, 1.0)
 	end
 end
 
@@ -940,8 +1255,8 @@ begin
 	feedback_model  = RadiativeModel(; ε = varε, α = varα, ϕ)
 	reference_model = RadiativeModel(; ε = 0.8, ϕ)
 
-	evolve_model!(feedback_model,  Δt = 50, stop_year = 50)
-	evolve_model!(reference_model, Δt = 50, stop_year = 50);
+	evolve_model!(feedback_model,  Δt = 60, stop_year = 50)
+	evolve_model!(reference_model, Δt = 60, stop_year = 50);
 
 	α_obs = 1 .- ASR_obs ./ feedback_model.Q
 
@@ -1000,8 +1315,12 @@ begin
 	
 	md"""
 	### Outgoing Longwave Radiation (OLR)
-	
+
 	Outgoing longwave radiation is the energy that the earth loses to space in the form of radiative emission. It has a contribution from the atmosphere and a contribution from the emitted energy from the surface that manages to escape from the absorption of the atmosphere
+	```math
+	OLR = (1-\varepsilon) \sigma T_s^4 + \varepsilon \sigma T_a^4
+	```
+	in our model
 	```
 	OLR(model) = @. (1 - emissivity(model)) * σ * model.Tₛ^4 + emissivity(model) * σ * model.Tₐ^4
 	```
@@ -1013,316 +1332,6 @@ begin
 	"""
 end
 
-# ╔═╡ 901548f8-a6c9-48f8-9c8f-887500081316
-md"""
-# Section 2.4: Heat transport
-
-We have seen that the latitudinal temperature gradient generates a global circulation that transports heat from the equator to the poles. It is too computationally expensive to solve the governing equations here (General Circulation Models, or GCMs run ono supercomputers for days to solve the climate system). So we have to model our latitudinal transport in an easier way
-"""
-
-# ╔═╡ 590c1026-8e82-4dc7-a07b-6f3b96fbc0ee
-md"""
-### Global atmospheric circulation
-
-There are three main factors that we have to take into account when considering large scale atmospheric circulation:
-- hot air rises
-- cold air sinks
-- Coriolis force pushes winds to the right in the upper hemisphere and to the left in the lower hemisphere
-
-Hot air in the equator rises upwards and moves towards the pole. It cools down in the process and about 30ᵒ it starts to sink creating large circulation cells called Hadley cells. At the poles, cold dense air tends to sink and move down towards the equator, creating the Polar pressure cells. While moving toward the equator, the air coming from the pole encounters faster spinning latitudes and is, therefore, diverted by the Coriolis effect. In between these two major cells, we form strong winds which are diverted towards the east (westerlies)
-
-$(Resource("https://tdgil.com/wp-content/uploads/2020/04/Hadley-Cells-and-Wind-Directions.jpg", :height => 500))
-**Figure**: schematic depicting the global atmospheric circulation
-
-Global circulation requires the solution of a complex system of partial differential equations on the sphere. These equations (named Navier-Stokes equations) the conservation of mass, momentum, and energy in the climate system.
-```math
-\begin{align}
- & \frac{\partial\boldsymbol{\rho u}}{\partial t} + \boldsymbol{\nabla} \cdot (\rho \boldsymbol{u} \otimes \boldsymbol{u}) + f\widehat{\boldsymbol{z}} \times \boldsymbol{u} = - \boldsymbol{\nabla} p + \rho \boldsymbol{g} \\
-& \frac{\partial \rho e}{\partial t} + \boldsymbol{\nabla}\cdot (\boldsymbol{u} (\rho e + p)) = Q_{incom} - \varepsilon \sigma T^4 \\
-& \frac{\partial \rho}{\partial t} + \boldsymbol{\nabla} \cdot (\rho \boldsymbol{u}) = 0 \\
-\end{align}
-```
-complemented by an equation of state (usually ideal gas) in the form ``p = EOS(\rho, e)``. General Circulation Models (or GCMs) solve this system of equations on a discrete three-dimensional grid to provide velocities and temperatures on the surface and in the atmosphere.
-"""
-
-# ╔═╡ 567fa8d3-35b4-40d7-8404-ae78d2874380
-md"""
-## Modeling latitudinal transport
-what do we have to add to our model to include atmospheric circulation?
-
-```math
-\begin{align}
-C_a \frac{dT_a}{dt} & = \sigma T_s^4 - 2\varepsilon \sigma T_a^4 + \mathcal{T}_a \\
-C_s \frac{dT_s}{dt} & = - \sigma T_s^4 + \varepsilon \sigma T_a^4 + (1 - \alpha) Q + \mathcal{T}_s
-\end{align}
-```
-
-where ``\mathcal{T}_a`` and ``\mathcal{T}_s`` represent the source/sink caused by heat transported around by currents in the atmosphere and in the ocean.
-
-How can we calculate these additional terms?
-
-$(Resource("https://raw.githubusercontent.com/simone-silvestri/ComputationalThinking/main/schematic.png", :height => 400))
-**Figure**: energy fluxes in our control volume.
-
-In our control volume we have a flux in ``F^+`` and a flux out ``F^-``
-The energy stored in out control volume (``\mathcal{T}``) will be the difference of the fluxes divided by the surface are of the control volume, where
-```math
-A = \underbrace{2\pi R \cos{\phi}}_{\text{circumference}} \cdot \underbrace{R\Delta \phi}_{\text{width}}
-```
-So 
-```math
-\mathcal{T} = - \frac{1}{2\pi R^2 \cos{\phi}} \frac{F^- - F^+}{\Delta \phi}
-```
-taking ``\Delta \phi \rightarrow 0``
-```math
-\mathcal{T} = - \frac{1}{2\pi R^2 \cos{\phi}} \frac{\partial F}{\partial \phi}
-```
-
-How can we represent ``F``? 
-Mathematically, the flux at the boundary of a computational element is calculated as ``(V\cdot T)``. The velocity ``V`` is the flow velocity at the interface of the element, which is determined by the Navier-Stokes equations, 3-dimensional PDEs that ensure momentum conservation in fluid dynamic systems. These equations are notoriously hard to solve, they require very fine grids due to the chaotic nature of fluid flows. Therefore, we will take a shortcut and _parametrize_ the flux at the interface (i.e., approximate the flux with a semi-empirical model).
-We can think at the transport of heat by the atmosphere as moving heat from _HOT_ to _COLD_ regions of the earth. In general, this holds if we zoom out enough. We can think of the transport by the atmosphere as a diffusion process, which goes "DOWN" the gradient of temperature. As such we can parametrize the heat flux with an effective conductivity
-```math
-F \approx - 2\pi R^2 \cos{\phi} \cdot \kappa \frac{\partial T}{\partial \phi}
-```
-where ``\kappa`` is the "conductivity" of our climate system in W/(m²K) due to the movement in the atmosphere
-And, finally assuming that ``\kappa`` does not vary in latitude (very strong assumption!) we can model the heat source due to transport as
-```math
-\mathcal{T} = \frac{\kappa}{\cos{\phi}} \frac{\partial}{\partial \phi} \left(\cos{\phi}  \frac{\partial T}{\partial \phi} \right)
-```
-
-NOTE: in a metal rod, where the area does not vary with length, the ``cos`` terms drop and a heat diffusion can be modelled with just
-```math
-\mathcal{T} \approx D \frac{\partial^2 T}{\partial x^2}
-```
-"""
-
-# ╔═╡ 0d8fffdc-a9f5-4d82-84ec-0f27acc04c21
-md"""
-## Let's code it up!
-
-Our governing system of equation is now a system of PDE, so we have to solve the ϕ-direction as well at the time.
-
-```math
-\begin{align}
-C_a \frac{\partial T_a}{\partial t} & = \sigma T_s^4 - 2\varepsilon \sigma T_a^4 + \frac{\kappa}{\cos{\phi}} \frac{\partial}{\partial \phi} \left(\cos{\phi}  \frac{\partial T_a}{\partial \phi} \right)\\
-C_s \frac{\partial T_s}{\partial t} & = - \sigma T_s^4 + \varepsilon \sigma T_a^4 + (1 - \alpha) Q + \frac{\kappa}{\cos{\phi}} \frac{\partial}{\partial \phi} \left(\cos{\phi}  \frac{\partial T_s}{\partial \phi} \right)
-\end{align}
-```
-
-We need to define a ``\Delta x`` (or ``\Delta \phi`` in our case) and we can discretize a spatial derivative in the same way as the time-derivative
-```math
-\left[\frac{1}{\cos{\phi}} \frac{\partial}{\partial \phi} \left(\cos{\phi}  \frac{\partial T}{\partial \phi} \right) \right]_j \approx \frac{1}{\cos{\phi_j} \Delta \phi} \left(\left[ \cos{\phi} \frac{\partial T}{\partial \phi} \right]_{j+1/2} - \left[ \cos{\phi} \frac{\partial T}{\partial \phi} \right]_{j-1/2} \right)
-```
-In the same way we can approximate the first derivative on interfaces as
-```math
-\left[\cos{\phi}\frac{\partial T}{\partial \phi} \right]_{j+1/2} \approx \cos{\phi_{j+1/2}}\frac{T_{j+1} - T_{j}}{\Delta \phi}
-```
-The additional tendency term caused by heat transport becomes:
-```math
-G_\kappa = \frac{\kappa}{\cos{\phi_j}\Delta \phi} \left(\cos{\phi_{j+1/2}} \frac{T_{j+1} - T_j}{\Delta \phi} - \cos{\phi_{j-1/2}} \frac{T_{j} - T_{j-1}}{\Delta \phi} \right)
-```
-"""
-
-
-# ╔═╡ 930935f8-832a-45b4-8e5e-b194afa917c6
-# begin 	
-# 	struct DiffusiveModel{S, T, K, E, A, F, C, ΦF, ΦC}
-# 		stepper :: S
-# 		Tₛ :: T # surface temperature
-# 		Tₐ :: T # atmospheric temperature
-# 		κₛ :: K # surface diffusivity
-# 		κₐ :: K # atmospheric diffusivity
-# 		ε  :: E # atmospheric emissivity
-# 		α  :: A # surface albedo
-# 		Q  :: F # forcing
-# 		Cₛ :: C # surface heat capacity
-# 		Cₐ :: C # atmospheric heat capacity
-# 		ϕᶠ :: ΦF # the latitudinal grid at interface points
-# 		ϕᶜ :: ΦC # the latitudinal grid at center points
-# 	end
-
-# 	const ExplicitDiffusiveModel   = DiffusiveModel{<:ExplicitTimeStep}
-# 	const ImplicitDiffusiveModel   = DiffusiveModel{<:ImplicitTimeStep}
-
-# 	timestepping(model::ExplicitDiffusiveModel) = "Explicit"
-# 	timestepping(model::ImplicitDiffusiveModel) = "Implicit"
-
-# 	# We define a constructor for the DiffusiveModel
-# 	function DiffusiveModel(step, N; κ = 0.55, κₛ = κ, ε = 0.5, α = 0.2985, Q = 341.3)
-# 		Cₛ = 1000.0 * 4182.0 * 100 / (3600 * 24) # ρ * c * H / seconds_per_day
-# 		Cₐ = 1e5 / 10 * 1000 / (3600 * 24) 		 # Δp / g * c / seconds_per_day
-# 		ϕᶠ = range(-π/2, π/2, length=N+1)
-# 		ϕᶜ = 0.5 .* (ϕᶠ[2:end] .+ ϕᶠ[1:end-1])
-# 		Tₛ = 288.0 * ones(N)
-# 		Tₐ = 288.0 * ones(N)
-# 		return DiffusiveModel(step, Tₛ, Tₐ, κₛ, κ, ε, α, Q, Cₛ, Cₐ, ϕᶠ, ϕᶜ)
-# 	end
-
-# 	# A pretty show method that displays the model's parameters
-# 	function Base.show(io::IO, model::DiffusiveModel)
-# 		print(io, "One-D energy budget model with:", '\n',
-# 		"├── time stepping: $(timestepping(model))", '\n',
-#     	"├── ε: $(emissivity(model))", '\n',
-#       "├── α: $(albedo(model))", '\n',
-#       "├── κ: $(model.κₛ)", '\n',
-#       "└── Q: $(model.Q) Wm⁻²")
-# 	end
-
-# 	# We define, again, the emissivities and albedo as function of the model
-# 	emissivity(model::DiffusiveModel) = model.ε
-# 	emissivity(model::DiffusiveModel{<:Any, <:Any, <:Any, <:Function}) = model.ε(model)
-
-# 	albedo(model::DiffusiveModel) = model.α
-# 	albedo(model::DiffusiveModel{<:Any, <:Any, <:Any, <:Any, <:Function}) = model.α(model)
-# end
-
-# ╔═╡ abdbbcaa-3a76-4a47-824d-6da73bc71c31
-# test_1D_model = DiffusiveModel(ImplicitTimeStep(), 90)
-
-# ╔═╡ 1cef338d-5c4a-4ea5-98d7-9ac4f11922f3
-md"""
-### Coding explicit time stepping with diffusion
-
-Coding the explicit time stepping won't be too different than what we did with the ODE. \ 
-We define the tendencies and add the explicit diffusion term calculated as above. \
-This time we need boundary conditions for our PDE. 
-
-We assume that there are no fluxes over the poles.
-```math
-F^+(90^\circ) = F^-(-90^\circ) = 0
-```
-
-"""
-
-# ╔═╡ 71cff056-a36c-4fd4-babb-53018894ac5c
-# begin
-# 	function explicit_diffusion(T, Δϕ, ϕᶠ, ϕᶜ)
-# 		# Calculate the flux at the interfaces
-# 		Flux = cos.(ϕᶠ[2:end-1]) .* (T[2:end] .- T[1:end-1]) ./ Δϕ
-# 		# add boundary conditions
-# 		# We impose 0-flux boundary conditions
-# 		Flux = [0.0, Flux..., 0.0]
-# 		return 1 ./ cos.(ϕᶜ) .* (Flux[2:end] .- Flux[1:end-1]) ./ Δϕ
-# 	end
-	
-# 	function tendencies(model)
-# 		Tₛ = model.Tₛ
-# 		Tₐ = model.Tₐ
-# 		α  = albedo(model)
-# 		ε  = emissivity(model)
-
-# 		Δϕ = model.ϕᶠ[2] - model.ϕᶠ[1]
-# 		Dₛ = model.κₛ .* explicit_diffusion(model.Tₛ, Δϕ, model.ϕᶠ, model.ϕᶜ)
-# 		Dₐ = model.κₐ .* explicit_diffusion(model.Tₐ, Δϕ, model.ϕᶠ, model.ϕᶜ)
-
-# 		Gₛ = @. (1 - α) * model.Q + σ * (ε * Tₐ^4 - Tₛ^4) + Dₛ
-# 		Gₐ = @. σ * ε * (Tₛ^4 - 2 * Tₐ^4) + Dₐ
-# 		return Gₛ, Gₐ
-# 	end
-
-# 	function time_step!(model::ExplicitDiffusiveModel, Δt)
-
-# 		Gₛ, Gₐ = tendencies(model)
-	
-# 		model.Tₛ .+= Δt * Gₛ / model.Cₛ
-# 		model.Tₐ .+= Δt * Gₐ / model.Cₐ
-# 	end
-end
-
-# ╔═╡ 83be4f9d-6c85-4e5b-9379-00618c9e39be
-md"""
-### Coding implicit time stepping with diffusion
-
-to code an implicit time stepping method, we can reutilize the matrix we used before (the sources and interexchange terms do not change)
-There are new terms to be added:
-
-```math
-G_\kappa^{(n+1)} = \frac{\kappa}{\cos{\phi_j}\Delta \phi} \left(\cos{\phi_{j+1/2}} \frac{T_{j+1}^{(n+1)} - T_j^{(n+1)}}{\Delta \phi} - \cos{\phi_{j-1/2}} \frac{T_{j}^{(n+1)} - T_{j-1}^{(n+1)}}{\Delta \phi} \right)
-```
-we can rearrange it as
-```math
-G_\kappa^{(n+1)} = \kappa\frac{\cos{\phi_{j-1/2}}}{\cos{\phi_j}\Delta\phi^2}  T_{j-1}^{(n+1)} + \kappa\frac{\cos{\phi_{j+1/2}}}{\cos{\phi_j}\Delta\phi^2}  T_{j+1}^{(n+1)} - \kappa\frac{\cos{\phi_{j+1/2}} + \cos{\phi_{j-1/2}}}{\cos{\phi_j}\Delta\phi^2} T_j^{(n+1)}
-```
-```math
-G_\kappa^{(n+1)} = a T_{j-1}^{(n+1)} + c T_{j+1}^{(n+1)} - (a+c) T_j^{(n+1)}
-```
-where 
-```math
-a = \kappa\frac{\cos{\phi_{j-1/2}}}{\cos{\phi_j}\Delta\phi^2} \ \ \ \text{and} \ \ \ c = \kappa\frac{\cos{\phi_{j+1/2}}}{\cos{\phi_j}\Delta\phi^2}
-```
-we have to add ``(a+c)`` to the diagonal, ``a`` to the diagonal at position ``-1`` and ``c`` to the diagonal at position ``+1``
-
-**_Adding boundary conditions_** \
-at ``j = 1/2`` we impose a no flux boundary condition. This implies that
-```math
-F_{1/2} = 0 \Rightarrow T_0 = T_1
-```
-then ``G_{\kappa}^{(n+1)}`` at 1 simplifies to
-```math
-\left[G_\kappa^{(n+1)}\right]_1 = c T_{2}^{(n+1)} - c T_1^{(n+1)}
-```
-Simply put, we avoid adding ``a`` to the first row. The same happens for ``G_{\kappa}^{(n+1)}`` at ``m`` (with ``m`` the length of ``\phi``) where, assuming that ``F_{m+1/2} = 0`` implies that
-```math
-\left[G_\kappa^{(n+1)}\right]_m = a T_{m-1}^{(n+1)} - a T_m^{(n+1)}
-```
-"""
-
-# ╔═╡ 7c7439f0-d678-4b68-a5e5-bee650fa17e2
-# function construct_diffusion_matrix(model, Δt)
-
-# 	A = construct_matrix(model, Δt)
-	
-# 	cosϕᶜ = cos.(model.ϕᶜ)
-# 	Δϕ = model.ϕᶠ[2] - model.ϕᶠ[1]
-
-# 	a = @. 1 / Δϕ^2 / cosϕᶜ * cos(model.ϕᶠ[1:end-1])
-# 	c = @. 1 / Δϕ^2 / cosϕᶜ * cos(model.ϕᶠ[2:end])
-
-# 	m = length(model.Tₛ)
-#     for i in 1:m
-# 		# Adding the off-diagonal entries corresponding to Tⱼ₊₁ (exclude the last row)
-#         if i < m
-#             A[i  , i+1]   = - Δt * model.κₐ * c[i]
-#             A[i+m, i+1+m] = - Δt * model.κₛ * c[i]
-# 		end
-# 		# Adding the off-diagonal entries corresponding to Tⱼ₋₁ (exclude the first row)
-#         if i > 1 
-#             A[i,   i-1]   = - Δt * model.κₐ * a[i]
-#             A[i+m, i-1+m] = - Δt * model.κₛ * a[i]
-#         end
-# 		# Adding the diagonal entries
-#         A[i  , i]   += Δt * model.κₐ * (a[i] + c[i])
-#         A[i+m, i+m] += Δt * model.κₛ * (a[i] + c[i])
-#     end
-	
-# 	return A
-# end
-
-# ╔═╡ 57dde8ad-f7de-4ca6-bfab-235bc13131c0
-md"""
-Last thing to do is calculate the rhs and solve the linear system
-"""
-
-# ╔═╡ 9a5ac384-f5e6-41b0-8bc4-44e2ed6be472
-# function time_step!(model::ImplicitDiffusiveModel, Δt)
-	
-# 	A = construct_diffusion_matrix(model, Δt)
-# 	α = albedo(model)
-
-# 	rhsₐ = model.Cₐ .* model.Tₐ
-# 	rhsₛ = model.Cₛ .* model.Tₛ .+ Δt .* (1 .- α) .* model.Q
-	
-# 	rhs = [rhsₐ..., rhsₛ...]
-
-# 	T = A \ rhs
-
-# 	nₐ = length(model.Tₐ)
-# 	nₛ = length(model.Tₛ)
-
-# 	model.Tₐ .= T[1:nₐ]
-# 	model.Tₛ .= T[nₐ+1:nₐ+nₛ]
-# end
-
 # ╔═╡ d1a741ad-f28d-48c7-9f15-d55d0801573d
 md"""
 # Temperature distribution with diffusion
@@ -1332,66 +1341,66 @@ md"""
 md""" κ $(@bind κ_slider PlutoUI.Slider(0:0.01:1, show_value=true)) """
 
 # ╔═╡ 514ee86b-0aeb-42cd-b4cd-a795ed23b3de
-# begin
-# 	F = annual_mean_insolation.(ϕ)
+begin
+	F = annual_mean_insolation.(ϕ)
 
-# 	model_1D = DiffusiveModel(ImplicitTimeStep(), length(F); κ = κ_slider, ε = varε, α = varα, Q = F)
+	model_1D = DiffusiveModel(ImplicitTimeStep(), length(F); κ = κ_slider, ε = varε, α = varα, Q = F)
 	
-# 	evolve_model!(model_1D, Δt = 1, stop_year = 50)
+	evolve_model!(model_1D, Δt = 30, stop_year = 50)
 	
-# 	DTκ0 = feedback_model.Tₛ[45] - feedback_model.Tₛ[end]
-# 	DTκ1 = model_1D.Tₛ[45] - model_1D.Tₛ[end]
-# 	DTob = T_obs[45] - T_obs[end-6]
+	DTκ0 = feedback_model.Tₛ[45] - feedback_model.Tₛ[end]
+	DTκ1 = model_1D.Tₛ[45] - model_1D.Tₛ[end]
+	DTob = T_obs[45] - T_obs[end-6]
 
-# 	title = @sprintf("T(0ᵒ) - T(90ᵒ): %.2f (κ = 0), %.2f (κ = %.2f), %.2f (obs)", 
-# 					 DTκ0, DTκ1, κ_slider, DTob)
+	title = @sprintf("T(0ᵒ) - T(90ᵒ): %.2f (κ = 0), %.2f (κ = %.2f), %.2f (obs)", 
+					 DTκ0, DTκ1, κ_slider, DTob)
 	
-# 	plot_latitudinal_variables!(ϕ, [feedback_model.Tₛ .- 273, 
-# 									model_1D.Tₛ .- 273,
-# 									T_obs .- 273], 
-# 									["model with κ = 0",
-# 									 "model with κ = $κ_slider",
-# 									 "observed T"], 
-# 									[:blue, :blue, :black], 
-# 									[:dash, :solid, :dashdot];
-# 									ylims = (-70, 70), title)
+	plot_latitudinal_variables!(ϕ, [feedback_model.Tₛ .- 273, 
+									model_1D.Tₛ .- 273,
+									T_obs .- 273], 
+									["model with κ = 0",
+									 "model with κ = $κ_slider",
+									 "observed T"], 
+									[:blue, :blue, :black], 
+									[:dash, :solid, :dashdot];
+									ylims = (-70, 70), title)
 	
-# 	current_figure()	
-# end
+	current_figure()	
+end
 
 # ╔═╡ c98fcf26-d715-47c2-84ac-63bffe02d813
 md"""
-Is this a sensible conductivity value? Heat transport is caused by atmospheric circulation, so what is a plausible value of the diffusivity caused by atmospheric motion? If we take into account the velocity of a typical atmospheric eddy ``V``, the order of magnitude of the flux is ``V \cdot T`` (where ``T`` is a temperature scale). We parameterize this with a term that looks like ``K \cdot T / L`` where ``K`` is our diffusivity expressed in m²/s and ``L`` is a typical length scale of movement in the atmosphere. Then it should hold that
+Is this a sensible conductivity value? Heat transport is caused by global circulation, so what is a plausible value of the diffusivity caused by the oceanic motion? If we take into account the velocity of a typical ocean eddy ``V``, the order of magnitude of the flux is ``V \cdot T`` (where ``T`` is a temperature scale). We parameterize this with a term that looks like ``K \cdot T / L`` where ``K`` is our diffusivity expressed in m²/s and ``L`` is a typical length scale of oceanic motion. Then it should hold that
 ```math
 K \cdot\frac{T}{L} \sim V \cdot T 
 ```
-If we fill in typical values for atmospheric velocity and length scales (about ``20`` m/s and ``2000`` km) we get that
+If we fill in typical values for ocean's velocity and length scales (about ``0.5`` m/s and ``100`` km) we get that
 ```math
-K \sim V\cdot L \sim 10^7 \ \ \text{m}^2/s
+K \sim V\cdot L \sim 5 \cdot 10^4 \ \ \text{m}^2/s
 ```
 This diffusivity corresponds to a conductivity ``\kappa`` (in W/m²K) of
 ```math
-\kappa \sim \frac{K C_a}{2\pi R^2} \approx 0.45 \ \ \text{W}/\text{m}^2\text{K}
+\kappa \sim \frac{K C_s}{R^2} \approx 0.49 \ \ \text{W}/\text{m}^2\text{K}
 ```
 """
 
 # ╔═╡ 6534f98d-1270-4e7c-8ce8-66a6b1ee48f7
-# begin	
-# 	HF(model) = model.κₛ .* explicit_diffusion(model.Tₛ, deg2rad(2), model.ϕᶠ, model.ϕᶜ) 
+begin	
+	HF(model) = model.κ .* explicit_diffusion(model.Tₛ, deg2rad(2), model.ϕᶠ, model.ϕᶜ) 
 
-# 	plot_latitudinal_variables!(ϕ, [ASR(model_1D), 
-# 									OLR(model_1D), 
-# 									HF(model_1D)], 
-# 									["ASR", "OLR", "transport"], 
-# 									[:red, :blue, :green], 
-# 									[:solid, :dash, :solid, :dash, :solid],
-# 									ylabel = "Energy Budget Wm⁻²",
-# 									leg_pos = :cc)
-# 	md"""
-# 	$(current_figure())
-# 	**Figure**: Energy budget for a climate with transport.
-# 	"""
-# end
+	plot_latitudinal_variables!(ϕ, [ASR(model_1D), 
+									OLR(model_1D), 
+									HF(model_1D)], 
+									["ASR", "OLR", "transport"], 
+									[:red, :blue, :green], 
+									[:solid, :dash, :solid, :dash, :solid],
+									ylabel = "Energy Budget Wm⁻²",
+									leg_pos = :cc)
+	md"""
+	$(current_figure())
+	**Figure**: Energy budget for a climate with transport.
+	"""
+end
 
 # ╔═╡ 77a73a9d-9d78-4cf5-ae19-f1107fa5b4c2
 begin
@@ -1400,7 +1409,7 @@ begin
 	Heat flux can only redistribute energy. It is then important to check that our solution method does not create or destroy energy.
 	Let's compute the integral of the transport term in latitude
 	```math
-	\int_{-90^o}^{90^o} \mathcal{T} \cos{\phi} d\phi \approx \sum_{j = 1}^N \mathcal{T}_j \cos{\phi_j} \cdot (\phi_{j+1/2} - \phi_{j-1/2}) 
+	\int_{-90^o}^{90^o} \tau \cos{\phi} d\phi \approx \sum_{j = 1}^N \tau_j \cos{\phi_j} \cdot (\phi_{j+1/2} - \phi_{j-1/2}) 
 	```
 	This is a good sanity check to make sure that our model is doing what is intended
 	"""
@@ -1447,13 +1456,17 @@ again, we want the amplitude to remain positively correlated (otherwise it means
 \Delta t < \frac{\Delta x^2}{4K}
 ```
 In the previous case, we had that at temperatures which were reasonable for the atmosphere, the limitation was in the tenth of days... \
-We already saw that a reasonable diffusivity (in m²/s) for the atmosphere is 
+We already saw that a reasonable diffusivity (in m²/s) for the ocean is 
 ```math
-K \approx 10^7 \ \ \text{m}^2/\text{s}
+K \approx 5 \cdot 10^4 \ \ \text{m}^2/\text{s}
+```
+atmospheric diffusivity is a higher because (1) heat capacity is lower at the same value of thermal conductivity or (2) velocity is higher and length scales are larger than the ocean. We can estimate that for the atmosphere the velocity and length scales are roughly in the order of 10 ms⁻¹ and 1000 km, respectively. This gives us a diffusivity
+```math
+K \sim V\cdot L \approx 10 \cdot 10^6 = 10^7 \ \ \ \text{m}^2\text{/s}
 ```
 If we have a model with a two-degree resolution (90 points), then ``\Delta x = R \Delta \phi \approx 200`` km, which means that the condition on the time step is
 ```math
-\Delta t < \frac{(2\cdot 10^{5})^2}{4 \cdot 10^7}  = 1000 s
+\Delta t < \frac{(2\cdot 10^{5})^2}{1 \cdot 10^7}  \approx 1 \text{hr} !
 ```
 We introduced another limitation in our explicit time stepping. The time step is connected with the spatial resolution of our model. This limitation is called CFL condition (Courant–Friedrichs–Lewy condition) and ensures that the temperature does not move more than one spatial grid cell in one-time step. 
 
@@ -1475,42 +1488,42 @@ where ``\alpha(\phi)`` is our previously defined array `varα`, ``T_{ice} = -10`
 """
 
 # ╔═╡ 65dedef2-03e5-4e0f-8022-53168952e7a8
-# begin 	
-# 	α_feedback(T, α) = T > 273.15 - 10.0 ? α : 0.7
-# 	κ = 0.5
-# 	α_model(model) = α_feedback.(model.Tₛ, varα)
+begin 	
+	α_feedback(T, α) = T > 273.15 - 10.0 ? α : 0.7
+	κ = 0.5
+	α_model(model) = α_feedback.(model.Tₛ, varα)
 
-# 	current_climate_model = DiffusiveModel(ImplicitTimeStep(), length(F); κ = 0.5, ε = varε, α = α_model, Q = F)
+	current_climate_model = DiffusiveModel(ImplicitTimeStep(), length(F); κ = 0.5, ε = varε, α = α_model, Q = F)
 
-# 	current_climate_model.Tₛ .= model_1D.Tₛ
-# 	current_climate_model.Tₐ .= model_1D.Tₐ
+	current_climate_model.Tₛ .= model_1D.Tₛ
+	current_climate_model.Tₐ .= model_1D.Tₐ
 
-# 	evolve_model!(current_climate_model, Δt = 50, stop_year = 150)
-# 	plot_latitudinal_variables!(ϕ, [feedback_model.Tₛ .- 273, 
-# 									model_1D.Tₛ .- 273,
-# 									current_climate_model.Tₛ .- 273,
-# 									T_obs .- 273], 
-# 									["model with κ = 0",
-# 									 "model with κ = $κ_slider",
-# 									 "model with α feedback",
-# 									 "observed T"], 
-# 									[:blue, :blue, :red, :black], 
-# 									[:dash, :solid, :solid, :dashdot];
-# 									ylims = (-70, 70))
+	evolve_model!(current_climate_model, Δt = 50, stop_year = 150)
+	plot_latitudinal_variables!(ϕ, [feedback_model.Tₛ .- 273, 
+									model_1D.Tₛ .- 273,
+									current_climate_model.Tₛ .- 273,
+									T_obs .- 273], 
+									["model with κ = 0",
+									 "model with κ = $κ_slider",
+									 "model with α feedback",
+									 "observed T"], 
+									[:blue, :blue, :red, :black], 
+									[:dash, :solid, :solid, :dashdot];
+									ylims = (-70, 70))
 
 
-# 	current_figure()
-# end
+	current_figure()
+end
 
 # ╔═╡ 8afe64e3-d19a-4801-b7b8-56d886f7a59a
-# plot_latitudinal_variables!(ϕ, [ASR(current_climate_model), 
-# 								OLR(current_climate_model), 
-# 								HF(current_climate_model)], 
-# 								["ASR", "OLR", "transport"], 
-# 								[:red, :blue, :green], 
-# 								[:solid, :solid, :solid],
-# 								ylabel = "Energy Budget Wm⁻²",
-# 								leg_pos = :cc)
+plot_latitudinal_variables!(ϕ, [ASR(current_climate_model), 
+								OLR(current_climate_model), 
+								HF(current_climate_model)], 
+								["ASR", "OLR", "transport"], 
+								[:red, :blue, :green], 
+								[:solid, :solid, :solid],
+								ylabel = "Energy Budget Wm⁻²",
+								leg_pos = :cc)
 
 # ╔═╡ ebcf224f-c006-4098-abf0-5c3644e2ee97
 md"""
@@ -1567,27 +1580,32 @@ Let's start from another initial condition
 
 # ╔═╡ 2b33a8a1-3772-4fb3-a914-a20a7aae91bc
 # begin
-# 	low_F = annual_mean_insolation.(ϕ; S₀ = S₀₁[1])
-# 	cold_climate_model = DiffusiveModel(ImplicitTimeStep(), length(low_F); κ, ε = varε, α = α_model, Q = low_F)
-# 	evolve_model!(cold_climate_model, Δt = 100, stop_year = 100)
+	# low_F = annual_mean_insolation.(ϕ; S₀ = S₀₁[1])
+	# cold_climate_model = DiffusiveModel(ImplicitTimeStep(), length(low_F); κ, ε = varε, α = α_model, Q = low_F)
+	# evolve_model!(cold_climate_model, Δt = 100, stop_year = 100)
 
-# 	new_current_climate_model = DiffusiveModel(ImplicitTimeStep(), length(low_F); κ, ε = varε, α = α_model, Q = F)
-# 	new_current_climate_model.Tₛ .= cold_climate_model.Tₛ
-# 	new_current_climate_model.Tₐ .= cold_climate_model.Tₐ
+	# new_current_climate_model = DiffusiveModel(ImplicitTimeStep(), length(low_F); κ, ε = varε, α = α_model, Q = F)
+	# new_current_climate_model.Tₛ .= cold_climate_model.Tₛ
+	# new_current_climate_model.Tₐ .= cold_climate_model.Tₐ
 	
-# 	evolve_model!(new_current_climate_model, Δt = 100, stop_year = 1000)
-
+	# evolve_model!(new_current_climate_model, Δt = 100, stop_year = 1000)
 	
-# 	plot_latitudinal_variables!(ϕ, [current_climate_model.Tₛ .- 273,
-# 									cold_climate_model.Tₛ .- 273, 
-# 									new_current_climate_model.Tₛ .- 273], 
-# 									["current climate",
-# 									 "cold climate (S₀ = 1200)",
-# 									 "current climate, different initial conditions"], 
-# 									[:blue, :blue, :red, :black], 
-# 									[:dash, :solid, :solid, :dashdot];
-# 									ylims = (-100, 70))
+	# plot_latitudinal_variables!(ϕ, [current_climate_model.Tₛ .- 273,
+	# 								cold_climate_model.Tₛ .- 273, 
+	# 								new_current_climate_model.Tₛ .- 273], 
+	# 								["current climate",
+	# 								 "cold climate (S₀ = 1200)",
+	# 								 "current climate, different initial conditions"], 
+	# 								[:blue, :blue, :red, :black], 
+	# 								[:dash, :solid, :solid, :dashdot];
+	# 								ylims = (-100, 70),
+	# 								leg_pos = :lt)
 # end
+
+# ╔═╡ f7a96c67-bb62-4440-8c8a-f31ebe0aab7e
+md"""
+The solution is different! This is an example of a system depending on it's history (also called _hysteresis_). 
+"""
 
 # ╔═╡ b768707a-5077-4662-bcd1-6d38b3e4f929
 html"""
@@ -3050,6 +3068,7 @@ version = "3.5.0+0"
 # ╠═1c33dc21-04af-4139-9061-696db73c3249
 # ╟─70713834-3246-45a4-a4c8-68513bb853ce
 # ╠═2b33a8a1-3772-4fb3-a914-a20a7aae91bc
+# ╟─f7a96c67-bb62-4440-8c8a-f31ebe0aab7e
 # ╟─b768707a-5077-4662-bcd1-6d38b3e4f929
 # ╟─419c8c31-6408-489a-a50e-af712cf20b7e
 # ╟─00000000-0000-0000-0000-000000000001

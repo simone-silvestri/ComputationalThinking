@@ -49,11 +49,8 @@ end
 struct ExplicitTimeStep end
 struct ImplicitTimeStep end
 
-ExplicitDiffusiveModel   = DiffusiveModel{<:ExplicitTimeStep}
-ImplicitDiffusiveModel   = DiffusiveModel{<:ImplicitTimeStep}
-
-timestepping(model::ExplicitDiffusiveModel) = "Explicit"
-timestepping(model::ImplicitDiffusiveModel) = "Implicit"
+ExplicitDiffusiveModel = DiffusiveModel{<:ExplicitTimeStep}
+ImplicitDiffusiveModel = DiffusiveModel{<:ImplicitTimeStep}
 
 # We define a constructor for the DiffusiveModel
 function DiffusiveModel(stepper, N; κ = 0.55, εₛ = 0.6, εₐ = 0.1, α = 0.2985, β = 0.05, Q = 341.3)
@@ -66,18 +63,6 @@ function DiffusiveModel(stepper, N; κ = 0.55, εₛ = 0.6, εₐ = 0.1, α = 0.
     Tₒ = 288.0 * ones(N)
     Tₛ = 288.0 * ones(N)
     return DiffusiveModel(stepper, Tₒ, Tₐ, Tₛ, κ, εₐ, εₛ, α, β, Q, Cₒ, Cₐ, Cₛ, ϕᶠ, ϕᶜ)
-end
-
-# A pretty show method that displays the model's parameters
-function Base.show(io::IO, model::DiffusiveModel)
-    print(io, "One-D energy budget model with:", '\n',
-    "├── time stepping: $(timestepping(model))", '\n',
-    "├── εₐ: $(model.εₐ)", '\n',
-    "├── εₛ: $(model.εₛ)", '\n',
-    "├── α: $(albedo(model))", '\n',
-	"├── β: $(model.β)", '\n',
-    "├── κ: $(model.κ)", '\n',
-    "└── Q: $(model.Q) Wm⁻²")
 end
 
 # We define, again, the emissivities and albedo as function of the model
